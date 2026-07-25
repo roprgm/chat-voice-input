@@ -8,6 +8,8 @@ The UI accepts a `Transcriber` and includes adapters for AI SDK transcription an
 the browser's native speech recognition. You can also connect any service or local
 model with the same small interface.
 
+[Live demo](https://chat-voice-input.vercel.app)
+
 ## Install
 
 ```bash
