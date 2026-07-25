@@ -24,7 +24,6 @@ function Demo() {
       />
       <div className="actions">
         <ChatVoiceInput
-          capture={false} // TEMPORARY EXPERIMENT: transcription only. DO NOT MERGE.
           disabled={false}
           onValueChange={setValue}
           transcriber={transcriber}
