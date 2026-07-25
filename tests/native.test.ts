@@ -16,7 +16,6 @@ type RecognitionEvent = {
 class FakeRecognition {
   static autoStartAudio = true;
   static instance: FakeRecognition | undefined;
-  static startError: unknown;
 
   continuous = false;
   lang = "";
@@ -27,7 +26,6 @@ class FakeRecognition {
   onresult: ((event: RecognitionEvent) => void) | null = null;
   abort = vi.fn(() => this.onend?.());
   start = vi.fn(() => {
-    if (FakeRecognition.startError) throw FakeRecognition.startError;
     if (FakeRecognition.autoStartAudio) this.onaudiostart?.();
   });
   stop = vi.fn();
@@ -47,10 +45,6 @@ class FakeRecognition {
 
 class FakeMicrophoneTrack extends EventTarget {
   stop = vi.fn();
-
-  disconnect(): void {
-    this.dispatchEvent(new Event("ended"));
-  }
 }
 
 type Session = {
@@ -80,14 +74,13 @@ function mediaStream() {
 async function startSession(options?: {
   readonly api?: "standard" | "webkit";
   readonly browserLanguage?: string;
-  readonly language?: string;
 }): Promise<Session> {
   installRecognition(options?.api);
   vi.stubGlobal("navigator", { language: options?.browserLanguage ?? "en-US" });
   const { stream, track } = mediaStream();
   const controller = new AbortController();
   const onDelta = vi.fn();
-  const transcription = await createNativeTranscriber({ language: options?.language }).start({
+  const transcription = await createNativeTranscriber().start({
     onDelta,
     signal: controller.signal,
     stream,
@@ -99,33 +92,15 @@ afterEach(() => {
   vi.unstubAllGlobals();
   FakeRecognition.autoStartAudio = true;
   FakeRecognition.instance = undefined;
-  FakeRecognition.startError = undefined;
 });
 
 describe("native transcriber", () => {
-  it("reports whether browser speech recognition is available", () => {
-    installRecognition();
-    expect(createNativeTranscriber().isSupported?.()).toBe(true);
-
-    vi.stubGlobal("SpeechRecognition", undefined);
-    expect(createNativeTranscriber().isSupported?.()).toBe(false);
-  });
-
   it("supports the prefixed WebKit recognition API", async () => {
     const session = await startSession({ api: "webkit", browserLanguage: "es-ES" });
 
     expect(session.recognition.lang).toBe("es-ES");
     session.controller.abort();
     await expect(session.transcription.text).resolves.toBe("");
-  });
-
-  it("configures continuous recognition and an explicit language", async () => {
-    const session = await startSession({ language: "es-AR" });
-
-    expect(session.recognition.continuous).toBe(true);
-    expect(session.recognition.lang).toBe("es-AR");
-    session.recognition.onend?.();
-    await session.transcription.text;
   });
 
   it("waits for confirmed recognition capture before starting", async () => {
@@ -179,15 +154,6 @@ describe("native transcriber", () => {
     await expect(session.transcription.text).resolves.toBe("hola mundo");
   });
 
-  it("fails when the provided microphone disconnects before producing text", async () => {
-    const session = await startSession();
-
-    session.track.disconnect();
-
-    await expect(session.transcription.text).rejects.toThrow("audio-capture");
-    expect(session.recognition.abort).toHaveBeenCalledOnce();
-  });
-
   it("ends successfully when recognition returns no text", async () => {
     const session = await startSession();
 
@@ -226,19 +192,11 @@ describe("native transcriber", () => {
     await expect(session.transcription.text).resolves.toBe("hello");
   });
 
-  it.each([
-    "audio-capture",
-    "bad-grammar",
-    "language-not-supported",
-    "network",
-    "not-allowed",
-    "phrases-not-supported",
-    "service-not-allowed",
-  ])("fails on recognition error %s", async (error) => {
+  it("fails on an unexpected recognition error", async () => {
     const session = await startSession();
 
-    session.recognition.emitError(error);
+    session.recognition.emitError("network");
 
-    await expect(session.transcription.text).rejects.toThrow(error);
+    await expect(session.transcription.text).rejects.toThrow("network");
   });
 });

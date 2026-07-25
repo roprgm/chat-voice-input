@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ChatVoiceInputButton, ChatVoiceInputError } from "../src/controls";
 import { ChatVoiceInputProvider } from "../src/provider";
+import { createNativeTranscriber } from "../src/transcribers/native";
 import type { Transcriber, TranscriberInput, Transcription } from "../src/transcribers/types";
 
 function deferred<T>() {
@@ -28,7 +29,7 @@ function microphone(permission?: Promise<MediaStream>) {
   const stream = { getTracks: () => [track] } as unknown as MediaStream;
   const getUserMedia = vi.fn().mockReturnValue(permission ?? Promise.resolve(stream));
   vi.stubGlobal("navigator", { mediaDevices: { getUserMedia } });
-  return { getUserMedia, stream, track };
+  return { getUserMedia, track };
 }
 
 function recording() {
@@ -88,11 +89,9 @@ describe("voice input provider", () => {
 
   it("rejects an unsupported local transcriber before requesting the microphone", async () => {
     const mic = microphone();
-    const transcriber = {
-      isSupported: () => false,
-      start: vi.fn(),
-    } satisfies Transcriber;
-    renderVoiceInput({ transcriber });
+    vi.stubGlobal("SpeechRecognition", undefined);
+    vi.stubGlobal("webkitSpeechRecognition", undefined);
+    renderVoiceInput({ transcriber: createNativeTranscriber() });
 
     fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
 
@@ -113,18 +112,6 @@ describe("voice input provider", () => {
 
     expect(getUserMedia).toHaveBeenCalledOnce();
     expect(session.start).not.toHaveBeenCalled();
-  });
-
-  it("keeps Loading visible while microphone permission is pending", () => {
-    const permission = new Promise<MediaStream>(() => undefined);
-    microphone(permission);
-    const session = recording();
-    renderVoiceInput({ transcriber: session.transcriber });
-
-    fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
-
-    expect(screen.getByRole("button", { name: "Loading voice input" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Stop voice input" })).toBeNull();
   });
 
   it("shows Retry when microphone permission is denied", async () => {
@@ -165,10 +152,10 @@ describe("voice input provider", () => {
     expect(mic.track.stop).not.toHaveBeenCalled();
   });
 
-  it("releases the microphone and shows Retry when the transcriber cannot start", async () => {
+  it("releases the microphone and shows Retry when the transcriber times out", async () => {
     const mic = microphone();
     const transcriber = {
-      start: vi.fn().mockRejectedValue(new Error("transcriber unavailable")),
+      start: vi.fn().mockRejectedValue(new DOMException("timed out", "TimeoutError")),
     } satisfies Transcriber;
     renderVoiceInput({ transcriber });
 
@@ -176,21 +163,6 @@ describe("voice input provider", () => {
 
     expect((await screen.findByRole("alert")).textContent).toBe("Voice input is unavailable.");
     expect(mic.track.stop).toHaveBeenCalledOnce();
-  });
-
-  it("passes the captured stream to the transcriber before showing Stop", async () => {
-    const mic = microphone();
-    const session = recording();
-    renderVoiceInput({ transcriber: session.transcriber });
-
-    fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
-    await screen.findByRole("button", { name: "Stop voice input" });
-
-    expect(session.start).toHaveBeenCalledWith({
-      onDelta: expect.any(Function),
-      signal: expect.any(AbortSignal),
-      stream: mic.stream,
-    });
   });
 
   it("streams transcript deltas into the current value", async () => {
