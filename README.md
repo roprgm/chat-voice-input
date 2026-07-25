@@ -1,7 +1,7 @@
 # Chat Voice Input
 
-A composable voice input with a microphone button, live waveform, timer, and built-in
-loading, recording, and error states.
+A composable voice input for chat composers, with a microphone button, live waveform,
+timer, and built-in loading, recording, and error states.
 
 Use the AI SDK adapter, native browser speech recognition, or connect any service or
 local model through the `Transcriber` interface. The component coordinates capture,
