@@ -9,6 +9,10 @@ the browser's native speech recognition. You can also connect any service or loc
 model with the same small interface.
 
 <p align="center">
+  <a href="https://chat-voice-input.vercel.app">Live demo</a>
+</p>
+
+<p align="center">
   <img
     src="https://github.com/user-attachments/assets/f80e1900-1009-4e7e-8f88-e5243aeb3c75"
     alt="Chat Voice Input recording interface"
@@ -16,9 +20,6 @@ model with the same small interface.
   />
 </p>
 
-<p align="center">
-  <a href="https://chat-voice-input.vercel.app">Live demo</a>
-</p>
 
 ## Install
 
