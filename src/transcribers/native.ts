@@ -24,6 +24,8 @@ type SpeechRecognitionErrorEvent = {
 type NativeSpeechRecognition = {
   continuous: boolean;
   lang: string;
+  onaudioend: (() => void) | null;
+  onaudiostart: (() => void) | null;
   onend: (() => void) | null;
   onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
   onresult: ((event: SpeechRecognitionEvent) => void) | null;
@@ -78,6 +80,20 @@ function streamStopper(stream: MediaStream): () => void {
   };
 }
 
+function deferred<T>(): {
+  readonly promise: Promise<T>;
+  readonly reject: (reason: unknown) => void;
+  readonly resolve: (value: T) => void;
+} {
+  let reject!: (reason: unknown) => void;
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+  return { promise, reject, resolve };
+}
+
 function appendFinalResults(
   event: SpeechRecognitionEvent,
   transcript: string,
@@ -111,24 +127,65 @@ async function startNativeTranscription(
   const recognition = new SpeechRecognition();
   const stream = await createWaveformStream(signal);
   const stopStream = streamStopper(stream);
+  const tracks = stream.getTracks();
+  const started = deferred<void>();
+  const captureEnded = deferred<void>();
+  const result = deferred<string>();
+  void started.promise.catch(() => undefined);
   let transcript = "";
-  const abort = () => {
+  let isCancelled = false;
+
+  function succeed(): void {
+    started.resolve();
+    captureEnded.resolve();
+    result.resolve(transcript);
+  }
+
+  function fail(error: Error): void {
+    started.reject(error);
+    captureEnded.resolve();
+    result.reject(error);
+  }
+
+  const microphoneEnded = () => {
+    const error = new Error("audio-capture");
+    if (transcript) {
+      succeed();
+    } else {
+      fail(error);
+    }
     try {
       recognition.abort();
     } finally {
       stopStream();
     }
   };
-  const text = new Promise<string>((resolve, reject) => {
-    recognition.onend = () => resolve(transcript);
-    recognition.onerror = (event) => reject(new Error(event.error));
-  }).finally(() => {
+  const abort = () => {
+    isCancelled = true;
+    try {
+      recognition.abort();
+    } finally {
+      succeed();
+      stopStream();
+    }
+  };
+  let isCleanedUp = false;
+  const cleanup = () => {
+    if (isCleanedUp) return;
+    isCleanedUp = true;
     signal.removeEventListener("abort", abort);
+    for (const track of tracks) {
+      track.removeEventListener("ended", microphoneEnded);
+    }
     stopStream();
+    recognition.onaudioend = null;
+    recognition.onaudiostart = null;
     recognition.onend = null;
     recognition.onerror = null;
     recognition.onresult = null;
-  });
+  };
+  const text = result.promise.finally(cleanup);
+  void text.catch(() => undefined);
 
   recognition.continuous = true;
   const recognitionLanguage = language ?? globalThis.navigator.language;
@@ -138,26 +195,38 @@ async function startNativeTranscription(
   recognition.onresult = (event) => {
     transcript = appendFinalResults(event, transcript, onDelta);
   };
+  recognition.onaudiostart = () => started.resolve();
+  recognition.onaudioend = () => captureEnded.resolve();
+  recognition.onend = succeed;
+  recognition.onerror = (event) => {
+    if (event.error === "no-speech" || (event.error === "aborted" && isCancelled) || transcript) {
+      succeed();
+      return;
+    }
+    fail(new Error(event.error));
+  };
+  for (const track of tracks) {
+    track.addEventListener("ended", microphoneEnded, { once: true });
+  }
   signal.addEventListener("abort", abort, { once: true });
   try {
     recognition.start();
   } catch (error) {
-    signal.removeEventListener("abort", abort);
-    stopStream();
-    recognition.onend = null;
-    recognition.onerror = null;
-    recognition.onresult = null;
+    fail(error instanceof Error ? error : new Error(String(error)));
     throw error;
   }
+  await started.promise;
+  signal.throwIfAborted();
 
   const stop = () => {
+    captureEnded.resolve();
     try {
       recognition.stop();
     } finally {
       stopStream();
     }
   };
-  return { stop, stream, text };
+  return { captureEnded: captureEnded.promise, stop, stream, text };
 }
 
 export function createNativeTranscriber(options?: NativeTranscriberOptions): Transcriber {

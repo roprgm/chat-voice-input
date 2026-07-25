@@ -182,6 +182,7 @@ const transcriber: Transcriber = {
     const recording = await startYourTranscription({ onDelta, signal });
 
     return {
+      captureEnded: recording.captureEnded,
       stop: recording.stop,
       stream: recording.stream,
       text: recording.text,
@@ -191,7 +192,21 @@ const transcriber: Transcriber = {
 ```
 
 `start` returns a stop function, an optional `MediaStream`, and a promise for the
-final text. The waveform and timer appear when `stream` is present.
+final text. It can also return an optional `captureEnded` promise so recording UI
+stops while final text is still being processed. The waveform and timer appear when
+`stream` is present.
+
+## Predictable recording lifecycle
+
+The built-in transcribers keep the controls aligned with actual microphone capture,
+including edge cases that voice interfaces often miss:
+
+- Browser support is checked first, then microphone access is requested immediately.
+- The UI stays loading until capture starts and stops showing recording as soon as
+  capture ends, even if final text is still processing.
+- Empty or no-speech recordings return to idle without an error or value change.
+- Permission, device, and transcription failures release the microphone and remain
+  retryable, while valid text survives a later recognition error.
 
 ## Development
 

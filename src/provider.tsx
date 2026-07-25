@@ -78,6 +78,17 @@ export function ChatVoiceInputProvider({
     setRecording("error");
   }
 
+  function complete(activeController: AbortController, finalText: string): void {
+    if (controller.current !== activeController) return;
+    activeController.abort();
+    controller.current = undefined;
+    setRecording(undefined);
+    const finalTranscript = finalText.trim() || transcript.current;
+    if (finalTranscript) {
+      onValueChange(message(prefix.current, finalTranscript));
+    }
+  }
+
   async function start(): Promise<void> {
     if (disabled || controller.current) return;
     const activeController = new AbortController();
@@ -93,7 +104,17 @@ export function ChatVoiceInputProvider({
       }, activeController.signal);
       activeController.signal.throwIfAborted();
       setRecording(live);
-      void live.text.catch(() => fail(activeController));
+      void live.captureEnded?.then(
+        () => {
+          if (controller.current !== activeController) return;
+          setRecording((current) => (typeof current === "object" ? "loading" : current));
+        },
+        () => fail(activeController),
+      );
+      void live.text.then(
+        (finalText) => complete(activeController, finalText),
+        () => fail(activeController),
+      );
     } catch {
       fail(activeController);
     }
@@ -108,15 +129,11 @@ export function ChatVoiceInputProvider({
 
     try {
       live.stop();
-      const finalTranscript = (await live.text).trim() || transcript.current;
-      if (controller.current !== activeController) return;
-      activeController.abort();
-      controller.current = undefined;
-      setRecording(undefined);
-      onValueChange(message(prefix.current, finalTranscript));
     } catch {
       fail(activeController);
+      return;
     }
+    await live.text.catch(() => undefined);
   }
 
   const isRecording = typeof recording === "object";

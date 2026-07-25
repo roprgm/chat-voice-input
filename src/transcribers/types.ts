@@ -1,4 +1,5 @@
 export type Transcription = {
+  readonly captureEnded?: Promise<void>;
   readonly stop: () => void;
   readonly stream: MediaStream | undefined;
   readonly text: Promise<string>;
