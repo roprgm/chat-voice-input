@@ -14,7 +14,7 @@ model with the same small interface.
   <img
     src="https://github.com/user-attachments/assets/f80e1900-1009-4e7e-8f88-e5243aeb3c75"
     alt="Chat Voice Input recording interface"
-    width="900"
+    width="640"
   />
 </p>
 
@@ -54,7 +54,8 @@ theming. The component does not own its surrounding layout.
 
 ## Use the AI SDK transcriber (recommended)
 
-The optional AI SDK adapter streams 24 kHz PCM audio through Vercel AI Gateway:
+The optional [AI SDK](https://ai-sdk.dev) adapter streams 24 kHz PCM audio through
+Vercel AI Gateway:
 
 ```bash
 pnpm add ai @ai-sdk/gateway
