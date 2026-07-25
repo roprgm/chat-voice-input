@@ -32,7 +32,9 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "vite build && tsc -p tsconfig.build.json",
+    "build:demo": "vite build demo --config demo/vite.config.ts",
     "check": "biome check . && bun run typecheck",
+    "demo": "vite demo --config demo/vite.config.ts",
     "format": "biome format --write .",
     "test": "vitest run",
     "test:watch": "vitest",

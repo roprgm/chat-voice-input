@@ -130,6 +130,9 @@ bun run test
 bun run build
 ```
 
+Run the minimal Web Speech demo with `bun run demo`. For Vercel, use
+`bun run build:demo` as the build command and `demo/dist` as the output directory.
+
 ## License
 
 [MIT](./LICENSE)

@@ -1,0 +1,58 @@
+* {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  margin: 0;
+  background: #09090b;
+  color: #fafafa;
+}
+
+#root {
+  width: min(42rem, calc(100% - 2rem));
+}
+
+.composer {
+  --chat-voice-input-accent: #3f3f46;
+  padding: 0.75rem;
+  border: 1px solid #27272a;
+  border-radius: 1rem;
+  background: #18181b;
+}
+
+textarea {
+  width: 100%;
+  min-height: 5rem;
+  resize: none;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.submit {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #fafafa;
+  color: #18181b;
+  cursor: pointer;
+}
