@@ -1,12 +1,12 @@
 # Contributing
 
-Install [Bun](https://bun.sh), then run:
+Install [pnpm](https://pnpm.io), then run:
 
 ```bash
-bun install
-bun run check
-bun run test
-bun run build
+pnpm install
+pnpm check
+pnpm test
+pnpm build
 ```
 
 Keep changes small, add tests for behavior changes, and avoid adding runtime

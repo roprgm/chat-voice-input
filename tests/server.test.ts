@@ -36,6 +36,18 @@ describe("createTranscriptionTokenResponse", () => {
     });
   });
 
+  it("uses the configured model", async () => {
+    gateway.getToken.mockResolvedValue({ token: "secret" });
+
+    const response = await createTranscriptionTokenResponse({ model: "openai/custom-whisper" });
+
+    await expect(response.json()).resolves.toEqual({
+      model: "openai/custom-whisper",
+      token: "secret",
+    });
+    expect(gateway.getToken).toHaveBeenCalledWith({ model: "openai/custom-whisper" });
+  });
+
   it("returns a safe service error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     gateway.getToken.mockRejectedValue(new Error("provider error"));

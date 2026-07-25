@@ -10,7 +10,7 @@ service, or local model.
 ## Install
 
 ```bash
-bun add chat-voice-input
+pnpm add chat-voice-input
 ```
 
 React 18 or newer is required.
@@ -20,7 +20,7 @@ React 18 or newer is required.
 The optional AI SDK adapter streams 24 kHz PCM audio through Vercel AI Gateway:
 
 ```bash
-bun add ai @ai-sdk/gateway
+pnpm add ai @ai-sdk/gateway
 ```
 
 ```tsx
@@ -62,7 +62,8 @@ export function POST(): Promise<Response> {
 ```
 
 Keep `AI_GATEWAY_API_KEY` on the server. When `apiKey` is omitted, AI Gateway uses
-`AI_GATEWAY_API_KEY` from the environment and then Vercel OIDC.
+`AI_GATEWAY_API_KEY` from the environment and then Vercel OIDC. Pass `model` to use
+another compatible realtime transcription model.
 
 Configure another route inside the adapter:
 
@@ -124,14 +125,14 @@ layout.
 ## Development
 
 ```bash
-bun install
-bun run check
-bun run test
-bun run build
+pnpm install
+pnpm check
+pnpm test
+pnpm build
 ```
 
-Run the minimal Web Speech demo with `bun run demo`. For Vercel, use
-`bun run build:demo` as the build command and `demo/dist` as the output directory.
+Run the minimal Web Speech demo with `pnpm demo`. For Vercel, use
+`pnpm build:demo` as the build command and `demo/dist` as the output directory.
 
 ## License
 

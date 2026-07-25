@@ -23,3 +23,12 @@ export default Object.assign(ChatVoiceInput, {
   Timer: ChatVoiceInputTimer,
   Waveform: ChatVoiceInputWaveform,
 });
+
+export {
+  ChatVoiceInputProvider,
+  type ChatVoiceInputProviderProps,
+  type ChatVoiceInputStatus,
+  useChatVoiceInput,
+} from "./provider";
+export type { Transcriber, Transcription } from "./transcription";
+export { ChatVoiceInputButton, ChatVoiceInputError, ChatVoiceInputTimer, ChatVoiceInputWaveform };

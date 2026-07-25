@@ -1,14 +1,16 @@
 import { createGateway } from "@ai-sdk/gateway";
 
-const model = "openai/gpt-realtime-whisper";
+const defaultModel = "openai/gpt-realtime-whisper";
 const headers = { "Cache-Control": "no-store" };
 
 export type TranscriptionTokenOptions = {
   readonly apiKey?: string;
+  readonly model?: string;
 };
 
 export async function createTranscriptionTokenResponse({
   apiKey,
+  model = defaultModel,
 }: TranscriptionTokenOptions = {}): Promise<Response> {
   try {
     const transcription = createGateway({ apiKey }).experimental_transcription;
