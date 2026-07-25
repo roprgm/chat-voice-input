@@ -4,20 +4,13 @@ import {
   experimental_streamTranscribe as streamTranscribe,
 } from "ai";
 
-import { createMicrophonePCMStream } from "./microphone";
+import { createMicrophonePCMStream } from "../microphone";
+import type { Transcriber, Transcription } from "./types";
+
+export type { Transcriber, Transcription } from "./types";
 
 const tokenTimeoutMs = 15_000;
 const defaultTokenEndpoint = "/api/transcription";
-
-export type Transcription = {
-  readonly stop: () => void;
-  readonly stream: MediaStream | undefined;
-  readonly text: Promise<string>;
-};
-
-export type Transcriber = {
-  readonly start: (onDelta: (delta: string) => void, signal: AbortSignal) => Promise<Transcription>;
-};
 
 export type AiSdkTranscriberOptions = {
   readonly tokenEndpoint?: string;
@@ -85,9 +78,8 @@ async function startTranscription(
   return { stop, stream: microphone.mediaStream, text };
 }
 
-export function createAiSdkTranscriber({
-  tokenEndpoint = defaultTokenEndpoint,
-}: AiSdkTranscriberOptions = {}): Transcriber {
+export function createAiSdkTranscriber(options?: AiSdkTranscriberOptions): Transcriber {
+  const tokenEndpoint = options?.tokenEndpoint ?? defaultTokenEndpoint;
   return {
     start: (onDelta, signal) => startTranscription(onDelta, signal, tokenEndpoint),
   };

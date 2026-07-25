@@ -22,7 +22,7 @@
       "import": "./dist/server.js"
     },
     "./ai-sdk": {
-      "types": "./dist/transcription.d.ts",
+      "types": "./dist/transcribers/ai-sdk.d.ts",
       "import": "./dist/ai-sdk.js"
     },
     "./style.css": "./dist/style.css"
@@ -38,7 +38,7 @@
     "format": "biome format --write .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --project tsconfig.node.json --noEmit && tsc --project demo/tsconfig.json --noEmit && tsc --project tests/tsconfig.json --noEmit",
     "prepublishOnly": "pnpm check && pnpm test && pnpm build"
   },
   "keywords": [
@@ -54,9 +54,6 @@
     "access": "public"
   },
   "packageManager": "pnpm@10.13.1",
-  "dependencies": {
-    "lucide-react": "^1.25.0"
-  },
   "peerDependencies": {
     "@ai-sdk/gateway": "^4.0.0",
     "ai": "^7.0.0",

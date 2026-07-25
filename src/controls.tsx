@@ -1,5 +1,4 @@
-import { LoaderCircle, Mic, Square } from "lucide-react";
-
+import { MicIcon, SpinnerIcon, StopIcon } from "./icons";
 import { type ChatVoiceInputStatus, useChatVoiceInput } from "./provider";
 
 function buttonLabel(state: ChatVoiceInputStatus, error: string): string {
@@ -10,13 +9,9 @@ function buttonLabel(state: ChatVoiceInputStatus, error: string): string {
 }
 
 function ButtonIcon({ state }: { readonly state: ChatVoiceInputStatus }) {
-  if (state === "loading") {
-    return <LoaderCircle aria-hidden="true" className="chat-voice-input-spinner" />;
-  }
-  if (state === "recording") {
-    return <Square aria-hidden="true" className="chat-voice-input-stop-icon" />;
-  }
-  return <Mic aria-hidden="true" />;
+  if (state === "loading") return <SpinnerIcon className="chat-voice-input-spinner" />;
+  if (state === "recording") return <StopIcon className="chat-voice-input-stop-icon" />;
+  return <MicIcon />;
 }
 
 export function ChatVoiceInputError() {

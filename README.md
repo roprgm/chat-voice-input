@@ -4,8 +4,9 @@ Chat Voice Input adds live microphone transcription to a React composer. It writ
 transcript deltas into a controlled value and includes a microphone button, waveform,
 timer, and error state. Audio is never stored by the package.
 
-The UI accepts a `Transcriber`, so transcription can run through any browser API,
-service, or local model.
+The UI accepts a `Transcriber` and includes adapters for AI SDK transcription and
+the browser's native speech recognition. You can also connect any service or local
+model with the same small interface.
 
 ## Install
 
@@ -15,7 +16,7 @@ pnpm add chat-voice-input
 
 React 18 or newer is required.
 
-## Use the AI SDK transcriber
+## Use the AI SDK transcriber (recommended)
 
 The optional AI SDK adapter streams 24 kHz PCM audio through Vercel AI Gateway:
 
@@ -65,6 +66,35 @@ Keep `AI_GATEWAY_API_KEY` on the server. When `apiKey` is omitted, AI Gateway us
 `AI_GATEWAY_API_KEY` from the environment and then Vercel OIDC. Pass `model` to use
 another compatible realtime transcription model.
 
+### Protect the token route
+
+The route mints a token that is spent against your Gateway account, and it has no
+authentication of its own. Anyone who finds the URL on a deployed app can transcribe
+on your bill, so gate it before shipping:
+
+- Require an authenticated session and reject anonymous requests.
+- Rate limit per user, and per IP for anything reachable without a session.
+- Serve it over HTTPS only, and never log the token.
+
+```ts
+import { createTranscriptionTokenResponse } from "chat-voice-input/server";
+
+export async function POST(request: Request): Promise<Response> {
+  const session = await auth(request);
+  if (!session) return new Response("Unauthorized", { status: 401 });
+  if (await isRateLimited(session.userId)) {
+    return new Response("Too Many Requests", { status: 429 });
+  }
+
+  return createTranscriptionTokenResponse({
+    apiKey: process.env.AI_GATEWAY_API_KEY,
+  });
+}
+```
+
+Tokens are short-lived and the response is sent with `Cache-Control: no-store`, so a
+leaked token expires on its own — but the route itself stays open until you close it.
+
 Configure another route inside the adapter:
 
 ```ts
@@ -72,6 +102,28 @@ const transcriber = createAiSdkTranscriber({
   tokenEndpoint: "/internal/transcription-token",
 });
 ```
+
+## Use the native browser transcriber
+
+For a setup without a backend, API key, or additional dependency, use the browser's
+built-in speech recognition:
+
+```tsx
+import ChatVoiceInput, { createNativeTranscriber } from "chat-voice-input";
+
+const transcriber = createNativeTranscriber();
+```
+
+Pass it to `ChatVoiceInput` exactly like the AI SDK adapter. You can optionally set
+the recognition language; otherwise it uses `navigator.language`:
+
+```ts
+const transcriber = createNativeTranscriber({ language: "es-ES" });
+```
+
+This adapter uses `SpeechRecognition` or `webkitSpeechRecognition`, so availability
+and transcription quality depend on the browser. It opens a microphone stream for
+the waveform and closes it when transcription stops, aborts, or finishes.
 
 ## Use another transcriber
 
@@ -118,9 +170,9 @@ import ChatVoiceInput, { useChatVoiceInput } from "chat-voice-input";
 Every component is also available as a named export.
 
 The optional stylesheet contains only the built-in control styles and exposes
-`--chat-voice-input-accent`, `--chat-voice-input-error`, and
-`--chat-voice-input-muted` for theming. The component does not own its surrounding
-layout.
+`--chat-voice-input-button-background`,
+`--chat-voice-input-button-background-hover`, and `--chat-voice-input-muted` for
+theming. The component does not own its surrounding layout.
 
 ## Development
 

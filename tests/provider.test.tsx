@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ChatVoiceInputButton, ChatVoiceInputError } from "../src/controls";
 import { ChatVoiceInputProvider } from "../src/provider";
-import type { Transcriber } from "../src/transcription";
+import type { Transcriber } from "../src/transcribers/types";
 
 afterEach(cleanup);
 

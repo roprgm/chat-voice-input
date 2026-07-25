@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from "react";
 
-import type { Transcriber, Transcription } from "./transcription";
+import type { Transcriber, Transcription } from "./transcribers/types";
 
 export type ChatVoiceInputStatus = "idle" | "loading" | "recording";
 
