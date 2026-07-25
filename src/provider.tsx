@@ -27,7 +27,7 @@ export type ChatVoiceInputProviderProps = {
   readonly children: ReactNode;
   readonly disabled: boolean;
   readonly onValueChange: (value: string) => void;
-  readonly transcriber: Transcriber;
+  readonly transcriber?: Transcriber;
   readonly value: string;
 };
 
@@ -130,7 +130,7 @@ export function ChatVoiceInputProvider({
 
   async function start(): Promise<void> {
     if (disabled || currentSession.current) return;
-    if (transcriber.isSupported?.() === false) {
+    if (transcriber?.isSupported?.() === false) {
       setRecording("error");
       return;
     }
@@ -163,6 +163,11 @@ export function ChatVoiceInputProvider({
         session.removeTrackListeners.push(() => track.removeEventListener("ended", onEnded));
       }
 
+      if (!transcriber) {
+        setRecording(session);
+        return;
+      }
+
       const live = await transcriber.start({
         onDelta(delta) {
           if (currentSession.current !== session) return;
@@ -188,7 +193,11 @@ export function ChatVoiceInputProvider({
     if (typeof recording !== "object") return;
     const session = recording;
     const live = session.transcription;
-    if (!live || currentSession.current !== session) return;
+    if (currentSession.current !== session) return;
+    if (!live) {
+      complete(session, "");
+      return;
+    }
     setRecording("loading");
 
     try {

@@ -54,7 +54,7 @@ function renderVoiceInput({
 }: {
   readonly disabled?: boolean;
   readonly onValueChange?: (value: string) => void;
-  readonly transcriber: Transcriber;
+  readonly transcriber?: Transcriber;
   readonly value?: string;
 }) {
   return render(
@@ -135,6 +135,18 @@ describe("voice input provider", () => {
 
     expect((await screen.findByRole("alert")).textContent).toBe("Voice input is unavailable.");
     expect(session.start).not.toHaveBeenCalled();
+  });
+
+  it("captures audio without a transcriber", async () => {
+    const mic = microphone();
+    renderVoiceInput({});
+
+    fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Stop voice input" }));
+
+    expect(mic.track.stop).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: "Start voice input" })).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("keeps Loading visible while the transcriber starts", async () => {
