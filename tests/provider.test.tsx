@@ -48,22 +48,15 @@ function firstInput(start: ReturnType<typeof vi.fn>): TranscriberInput {
 
 function renderVoiceInput({
   disabled = false,
-  onValueChange = vi.fn(),
+  onDelta = vi.fn(),
   transcriber,
-  value = "",
 }: {
   readonly disabled?: boolean;
-  readonly onValueChange?: (value: string) => void;
+  readonly onDelta?: (delta: string) => void;
   readonly transcriber?: Transcriber;
-  readonly value?: string;
 }) {
   return render(
-    <ChatVoiceInputProvider
-      disabled={disabled}
-      onValueChange={onValueChange}
-      transcriber={transcriber}
-      value={value}
-    >
+    <ChatVoiceInputProvider disabled={disabled} onDelta={onDelta} transcriber={transcriber}>
       <ChatVoiceInputError />
       <ChatVoiceInputButton />
     </ChatVoiceInputProvider>,
@@ -177,32 +170,55 @@ describe("voice input provider", () => {
     expect(mic.track.stop).toHaveBeenCalledOnce();
   });
 
-  it("streams transcript deltas into the current value", async () => {
+  it("emits transcript deltas without composing a value", async () => {
     microphone();
     const text = deferred<string>();
-    const onValueChange = vi.fn();
+    const onDelta = vi.fn();
     const transcriber: Transcriber = {
       async start({ onDelta }) {
         onDelta("hello");
-        onDelta(" world");
+        onDelta(".");
+        onDelta("\nworld");
         return { stop: vi.fn(), text: text.promise };
       },
     };
-    renderVoiceInput({ onValueChange, transcriber, value: "Draft:" });
+    renderVoiceInput({ onDelta, transcriber });
 
     fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
     await screen.findByRole("button", { name: "Stop voice input" });
 
-    expect(onValueChange.mock.calls).toEqual([["Draft: hello"], ["Draft: hello world"]]);
-    text.resolve("hello world");
+    expect(onDelta.mock.calls).toEqual([["hello"], ["."], ["\nworld"]]);
+    text.resolve("hello.\nworld");
     await screen.findByRole("button", { name: "Start voice input" });
+  });
+
+  it("does not re-emit the final transcript after streaming deltas", async () => {
+    microphone();
+    const session = recording();
+    const onDelta = vi.fn();
+    renderVoiceInput({ onDelta, transcriber: session.transcriber });
+
+    fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
+    await screen.findByRole("button", { name: "Stop voice input" });
+    firstInput(session.start).onDelta("hello");
+    expect(onDelta).toHaveBeenCalledWith("hello");
+
+    firstInput(session.start).onDelta("how are you");
+    expect(onDelta).toHaveBeenCalledWith("how are you");
+
+    onDelta.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Stop voice input" }));
+    session.text.resolve("hello how are you");
+
+    await screen.findByRole("button", { name: "Start voice input" });
+    expect(onDelta).not.toHaveBeenCalled();
   });
 
   it("stops capture immediately and waits for the final text", async () => {
     const mic = microphone();
     const session = recording();
-    const onValueChange = vi.fn();
-    renderVoiceInput({ onValueChange, transcriber: session.transcriber });
+    const onDelta = vi.fn();
+    renderVoiceInput({ onDelta, transcriber: session.transcriber });
 
     fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
     fireEvent.click(await screen.findByRole("button", { name: "Stop voice input" }));
@@ -211,8 +227,8 @@ describe("voice input provider", () => {
     expect(mic.track.stop).toHaveBeenCalledOnce();
     expect(screen.getByRole("button", { name: "Loading voice input" })).toBeTruthy();
 
-    session.text.resolve("hello world");
-    await waitFor(() => expect(onValueChange).toHaveBeenCalledWith("hello world"));
+    session.text.resolve(" hello world ");
+    await waitFor(() => expect(onDelta).toHaveBeenCalledWith(" hello world "));
     await screen.findByRole("button", { name: "Start voice input" });
   });
 
@@ -223,9 +239,8 @@ describe("voice input provider", () => {
       <form aria-label="Composer" onSubmit={(event) => event.preventDefault()}>
         <ChatVoiceInputProvider
           disabled={false}
-          onValueChange={vi.fn()}
+          onDelta={vi.fn()}
           transcriber={session.transcriber}
-          value=""
         >
           <ChatVoiceInputButton />
         </ChatVoiceInputProvider>
@@ -249,9 +264,8 @@ describe("voice input provider", () => {
       <form aria-label="Composer" onSubmit={(event) => event.preventDefault()}>
         <ChatVoiceInputProvider
           disabled={false}
-          onValueChange={vi.fn()}
+          onDelta={vi.fn()}
           transcriber={session.transcriber}
-          value=""
         >
           <ChatVoiceInputButton />
         </ChatVoiceInputProvider>
@@ -271,11 +285,10 @@ describe("voice input provider", () => {
   it("returns to idle without an error when the user stops without speaking", async () => {
     microphone();
     const session = recording();
-    const onValueChange = vi.fn();
+    const onDelta = vi.fn();
     renderVoiceInput({
-      onValueChange,
+      onDelta,
       transcriber: session.transcriber,
-      value: "existing text",
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
@@ -284,7 +297,7 @@ describe("voice input provider", () => {
 
     await screen.findByRole("button", { name: "Start voice input" });
     expect(screen.queryByRole("alert")).toBeNull();
-    expect(onValueChange).not.toHaveBeenCalled();
+    expect(onDelta).not.toHaveBeenCalled();
   });
 
   it("releases the microphone when transcription ends on its own", async () => {
@@ -339,12 +352,7 @@ describe("voice input provider", () => {
     await screen.findByRole("button", { name: "Stop voice input" });
     const { signal } = firstInput(session.start);
     view.rerender(
-      <ChatVoiceInputProvider
-        disabled
-        onValueChange={vi.fn()}
-        transcriber={session.transcriber}
-        value=""
-      >
+      <ChatVoiceInputProvider disabled onDelta={vi.fn()} transcriber={session.transcriber}>
         <ChatVoiceInputError />
         <ChatVoiceInputButton />
       </ChatVoiceInputProvider>,

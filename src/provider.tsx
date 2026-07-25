@@ -20,25 +20,22 @@ type ChatVoiceInputContextValue = {
   readonly status: ChatVoiceInputStatus;
   readonly stop: () => Promise<void>;
   readonly stream: MediaStream | undefined;
-  readonly transcript: string;
 };
 
 export type ChatVoiceInputProviderProps = {
   readonly children: ReactNode;
   readonly disabled: boolean;
-  readonly onValueChange: (value: string) => void;
+  readonly onDelta?: (delta: string) => void;
   readonly transcriber?: Transcriber;
-  readonly value: string;
 };
 
 type Session = {
   readonly controller: AbortController;
-  readonly prefix: string;
   readonly removeTrackListeners: Array<() => void>;
+  hasDelta: boolean;
   released: boolean;
   stream: MediaStream | undefined;
   transcription: Transcription | undefined;
-  transcript: string;
 };
 
 type Recording = Session | "error" | "loading" | undefined;
@@ -53,10 +50,6 @@ const microphoneConstraints: MediaStreamConstraints = {
     noiseSuppression: true,
   },
 };
-
-function message(prefix: string, transcript: string): string {
-  return [prefix, transcript].filter(Boolean).join(" ").trim();
-}
 
 function recordingStatus(recording: Recording): ChatVoiceInputStatus {
   if (typeof recording === "object") return "recording";
@@ -83,9 +76,8 @@ export function useChatVoiceInput(): ChatVoiceInputContextValue {
 export function ChatVoiceInputProvider({
   children,
   disabled,
-  onValueChange,
+  onDelta: emitDelta,
   transcriber,
-  value,
 }: ChatVoiceInputProviderProps) {
   const [recording, setRecording] = useState<Recording>();
   const currentSession = useRef<Session | undefined>(undefined);
@@ -123,9 +115,8 @@ export function ChatVoiceInputProvider({
     if (currentSession.current !== session) return;
     release(session);
     setRecording(undefined);
-    const finalTranscript = finalText.trim() || session.transcript;
-    if (finalTranscript) {
-      onValueChange(message(session.prefix, finalTranscript));
+    if (!session.hasDelta && finalText.trim()) {
+      emitDelta?.(finalText);
     }
   }
 
@@ -144,12 +135,11 @@ export function ChatVoiceInputProvider({
 
     const session: Session = {
       controller: new AbortController(),
-      prefix: value.trim(),
+      hasDelta: false,
       released: false,
       removeTrackListeners: [],
       stream: undefined,
       transcription: undefined,
-      transcript: "",
     };
     currentSession.current = session;
     flushSync(() => setRecording("loading"));
@@ -172,8 +162,8 @@ export function ChatVoiceInputProvider({
       const live = await transcriber.start({
         onDelta(delta) {
           if (currentSession.current !== session) return;
-          session.transcript += delta;
-          onValueChange(message(session.prefix, session.transcript));
+          session.hasDelta = true;
+          emitDelta?.(delta);
         },
         signal: session.controller.signal,
         stream: session.stream,
@@ -219,7 +209,6 @@ export function ChatVoiceInputProvider({
     status: recordingStatus(recording),
     stop,
     stream: isRecording ? recording.stream : undefined,
-    transcript: isRecording ? recording.transcript : "",
   };
   return (
     <ChatVoiceInputContext.Provider value={context}>{children}</ChatVoiceInputContext.Provider>
