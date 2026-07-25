@@ -33,7 +33,6 @@ export type ChatVoiceInputProviderProps = {
 
 type Session = {
   readonly controller: AbortController;
-  readonly prefix: string;
   readonly removeTrackListeners: Array<() => void>;
   released: boolean;
   stream: MediaStream | undefined;
@@ -54,8 +53,11 @@ const microphoneConstraints: MediaStreamConstraints = {
   },
 };
 
-function message(prefix: string, transcript: string): string {
-  return [prefix, transcript].filter(Boolean).join(" ").trim();
+function append(value: string, text: string): string {
+  const suffix = text.trim();
+  if (!suffix) return value;
+  const prefix = value.trimEnd();
+  return prefix ? `${prefix} ${suffix}` : suffix;
 }
 
 function recordingStatus(recording: Recording): ChatVoiceInputStatus {
@@ -89,6 +91,17 @@ export function ChatVoiceInputProvider({
 }: ChatVoiceInputProviderProps) {
   const [recording, setRecording] = useState<Recording>();
   const currentSession = useRef<Session | undefined>(undefined);
+  const currentValue = useRef(value);
+
+  useEffect(() => {
+    currentValue.current = value;
+  }, [value]);
+
+  function appendValue(text: string): void {
+    const nextValue = append(currentValue.current, text);
+    currentValue.current = nextValue;
+    onValueChange(nextValue);
+  }
 
   const release = useCallback((session: Session): void => {
     if (!session.released) {
@@ -125,7 +138,7 @@ export function ChatVoiceInputProvider({
     setRecording(undefined);
     const finalTranscript = finalText.trim();
     if (!session.transcript && finalTranscript) {
-      onValueChange(message(session.prefix, finalTranscript));
+      appendValue(finalTranscript);
     }
   }
 
@@ -144,7 +157,6 @@ export function ChatVoiceInputProvider({
 
     const session: Session = {
       controller: new AbortController(),
-      prefix: value.trim(),
       released: false,
       removeTrackListeners: [],
       stream: undefined,
@@ -173,7 +185,7 @@ export function ChatVoiceInputProvider({
         onDelta(delta) {
           if (currentSession.current !== session) return;
           session.transcript += delta;
-          onValueChange(message(session.prefix, session.transcript));
+          appendValue(delta);
         },
         signal: session.controller.signal,
         stream: session.stream,

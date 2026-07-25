@@ -198,7 +198,7 @@ describe("voice input provider", () => {
     await screen.findByRole("button", { name: "Start voice input" });
   });
 
-  it("preserves edits made after transcript deltas", async () => {
+  it("appends transcript deltas to the latest value", async () => {
     microphone();
     const session = recording();
     const onValueChange = vi.fn();
@@ -214,6 +214,17 @@ describe("voice input provider", () => {
         disabled={false}
         onValueChange={onValueChange}
         transcriber={session.transcriber}
+        value="hello"
+      >
+        <ChatVoiceInputError />
+        <ChatVoiceInputButton />
+      </ChatVoiceInputProvider>,
+    );
+    view.rerender(
+      <ChatVoiceInputProvider
+        disabled={false}
+        onValueChange={onValueChange}
+        transcriber={session.transcriber}
         value=""
       >
         <ChatVoiceInputError />
@@ -221,8 +232,13 @@ describe("voice input provider", () => {
       </ChatVoiceInputProvider>,
     );
     onValueChange.mockClear();
+    firstInput(session.start).onDelta("how are you");
+    expect(onValueChange).toHaveBeenCalledOnce();
+    expect(onValueChange).toHaveBeenCalledWith("how are you");
+
+    onValueChange.mockClear();
     fireEvent.click(screen.getByRole("button", { name: "Stop voice input" }));
-    session.text.resolve("hello");
+    session.text.resolve("hello how are you");
 
     await screen.findByRole("button", { name: "Start voice input" });
     expect(onValueChange).not.toHaveBeenCalled();
