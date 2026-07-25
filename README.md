@@ -10,6 +10,14 @@ model with the same small interface.
 
 [Live demo](https://chat-voice-input.vercel.app)
 
+<p align="center">
+  <img
+    src="https://github.com/user-attachments/assets/f80e1900-1009-4e7e-8f88-e5243aeb3c75"
+    alt="Chat Voice Input recording interface"
+    width="900"
+  />
+</p>
+
 ## Install
 
 ```bash
