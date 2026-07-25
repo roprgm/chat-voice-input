@@ -123,8 +123,8 @@ export function ChatVoiceInputProvider({
     if (currentSession.current !== session) return;
     release(session);
     setRecording(undefined);
-    const finalTranscript = finalText.trim() || session.transcript;
-    if (finalTranscript) {
+    const finalTranscript = finalText.trim();
+    if (!session.transcript && finalTranscript) {
       onValueChange(message(session.prefix, finalTranscript));
     }
   }

@@ -198,6 +198,36 @@ describe("voice input provider", () => {
     await screen.findByRole("button", { name: "Start voice input" });
   });
 
+  it("preserves edits made after transcript deltas", async () => {
+    microphone();
+    const session = recording();
+    const onValueChange = vi.fn();
+    const view = renderVoiceInput({ onValueChange, transcriber: session.transcriber });
+
+    fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
+    await screen.findByRole("button", { name: "Stop voice input" });
+    firstInput(session.start).onDelta("hello");
+    expect(onValueChange).toHaveBeenCalledWith("hello");
+
+    view.rerender(
+      <ChatVoiceInputProvider
+        disabled={false}
+        onValueChange={onValueChange}
+        transcriber={session.transcriber}
+        value=""
+      >
+        <ChatVoiceInputError />
+        <ChatVoiceInputButton />
+      </ChatVoiceInputProvider>,
+    );
+    onValueChange.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Stop voice input" }));
+    session.text.resolve("hello");
+
+    await screen.findByRole("button", { name: "Start voice input" });
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
+
   it("stops capture immediately and waits for the final text", async () => {
     const mic = microphone();
     const session = recording();

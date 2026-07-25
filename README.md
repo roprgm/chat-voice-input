@@ -189,6 +189,15 @@ failure shows `Voice input is unavailable.` and changes the button to Retry.
 | Microphone disconnects during recording | Aborts transcription; keeps emitted text; shows the error and Retry |
 | Voice input is disabled or unmounted while active | Aborts capture and ignores late results |
 
+## iOS limitation
+
+In Safari on iOS and iPadOS, native `SpeechRecognition` can conflict with the
+component's microphone stream and mute an audio track. After stopping, later
+recording or recognition attempts may receive no audio. See the WebKit reports
+for [SpeechRecognition muting an existing track](https://bugs.webkit.org/show_bug.cgi?id=179363#c28)
+and [subsequent captures producing no audio](https://bugs.webkit.org/show_bug.cgi?id=221192#c20).
+Prefer a stream-based transcriber such as the AI SDK adapter on these platforms.
+
 ## Development
 
 ```bash
