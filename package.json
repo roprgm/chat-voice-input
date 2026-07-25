@@ -48,13 +48,13 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "vite build && tsc --noEmit false --declaration --emitDeclarationOnly --outDir dist --rootDir src",
-    "build:demo": "vite build demo --config demo/vite.config.ts",
+    "build:demo": "pnpm --filter chat-voice-input-demo build",
     "check": "biome check . && pnpm typecheck",
-    "demo": "vite demo --config demo/vite.config.ts",
+    "demo": "pnpm --filter chat-voice-input-demo dev",
     "format": "biome format --write .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit && tsc --project tsconfig.node.json --noEmit && tsc --project demo/tsconfig.json --noEmit && tsc --project tests/tsconfig.json --noEmit",
+    "typecheck": "tsc --noEmit && tsc --project tsconfig.node.json --noEmit && pnpm --filter chat-voice-input-demo typecheck && tsc --project tests/tsconfig.json --noEmit",
     "prepublishOnly": "pnpm check && pnpm test && pnpm build"
   },
   "keywords": [
