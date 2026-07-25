@@ -20,6 +20,14 @@ model with the same small interface.
   />
 </p>
 
+## Features
+
+- Live transcript deltas in any controlled value
+- Native browser and AI SDK transcribers
+- Composable button, waveform, timer, and error
+- Loading, recording, stopping, and retry states
+- Custom transcriber interface
+- Audio is never stored
 
 ## Install
 
@@ -196,17 +204,44 @@ final text. It can also return an optional `captureEnded` promise so recording U
 stops while final text is still being processed. The waveform and timer appear when
 `stream` is present.
 
-## Edge cases handled
+## Covered edge cases
 
-The built-in transcribers keep the controls aligned with actual microphone capture,
-including edge cases that voice interfaces often miss:
+Failures show `Voice input is unavailable.` and change the microphone button to Retry.
+Adapters do not fall back to each other automatically.
 
-- Browser support is checked first, then microphone access is requested immediately.
-- The UI stays loading until capture starts and stops showing recording as soon as
-  capture ends, even if final text is still processing.
-- Empty or no-speech recordings return to idle without an error or value change.
-- Permission, device, and transcription failures release the microphone and remain
-  retryable, while valid text survives a later recognition error.
+### Shared behavior
+
+| Case | Behavior |
+| --- | --- |
+| Disabled | Does not start |
+| Microphone permission pending | Shows loading; no waveform or timer |
+| Capture active | Shows waveform, timer, and Stop |
+| User stops | Closes capture and shows loading until final text |
+| Empty or no-speech result | Returns to idle; no error or value change |
+| Start or transcription failure | Closes capture and shows the retryable error |
+| Disabled or unmounted while active | Aborts and closes capture |
+
+### Native browser transcriber
+
+| Case | Behavior |
+| --- | --- |
+| `SpeechRecognition` unavailable | Does not request the microphone; shows the error |
+| Microphone unavailable or denied | Does not start recognition; shows the error |
+| Microphone granted | Starts recognition; stays loading until `audiostart` |
+| `audioend` before final text | Hides recording UI; shows loading |
+| Microphone disconnected before text | Aborts recognition; shows the error |
+| Error after valid text | Keeps the text; returns to idle without an error |
+| Recognition ends without text | Returns to idle without an error |
+
+### AI SDK transcriber
+
+| Case | Behavior |
+| --- | --- |
+| User starts | Requests microphone and token in parallel |
+| Token pending; microphone ready | Starts capture; queues audio until the token arrives |
+| Token request fails or times out | Closes capture; shows the error |
+| Transcription stream fails | Keeps emitted text; closes capture; shows the error |
+| No transcript generated | Returns to idle without an error |
 
 ## Development
 
