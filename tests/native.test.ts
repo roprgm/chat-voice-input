@@ -166,6 +166,7 @@ describe("native transcriber", () => {
     const session = await startSession();
 
     session.recognition.emitError("no-speech");
+    session.recognition.onend?.();
 
     await expect(session.transcription.text).resolves.toBe("");
   });
@@ -177,6 +178,7 @@ describe("native transcriber", () => {
 
       session.transcription.stop();
       session.recognition.emitError(error);
+      session.recognition.onend?.();
 
       await expect(session.transcription.text).resolves.toBe("");
     },
@@ -187,6 +189,7 @@ describe("native transcriber", () => {
     session.recognition.emitResults({ 0: { transcript: "hello" }, isFinal: true });
 
     session.recognition.emitError("network");
+    session.recognition.onend?.();
 
     expect(session.onDelta).toHaveBeenCalledWith("hello");
     await expect(session.transcription.text).resolves.toBe("hello");
@@ -194,8 +197,15 @@ describe("native transcriber", () => {
 
   it("fails on an unexpected recognition error", async () => {
     const session = await startSession();
+    const settled = vi.fn();
+    void session.transcription.text.then(settled, settled);
 
     session.recognition.emitError("network");
+    await Promise.resolve();
+
+    expect(settled).not.toHaveBeenCalled();
+
+    session.recognition.onend?.();
 
     await expect(session.transcription.text).rejects.toThrow("network");
   });

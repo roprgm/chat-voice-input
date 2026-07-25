@@ -101,6 +101,7 @@ async function startNativeTranscription(
   let transcript = "";
   let isCancelled = false;
   let isStopping = false;
+  let terminalError: Error | undefined;
 
   function succeed(): void {
     started.resolve();
@@ -112,23 +113,21 @@ async function startNativeTranscription(
     result.reject(error);
   }
 
-  const microphoneEnded = () => {
-    if (isStopping) {
-      succeed();
+  function finish(): void {
+    if (terminalError) {
+      fail(terminalError);
       return;
     }
-    const error = new Error("audio-capture");
-    if (transcript) {
-      succeed();
-    } else {
-      fail(error);
-    }
-    recognition.abort();
+    succeed();
+  }
+
+  const microphoneEnded = () => {
+    if (!isStopping && !transcript) terminalError = new Error("audio-capture");
+    if (!isStopping) recognition.abort();
   };
   const abort = () => {
     isCancelled = true;
     recognition.abort();
-    succeed();
   };
   let isCleanedUp = false;
   const cleanup = () => {
@@ -156,15 +155,12 @@ async function startNativeTranscription(
     transcript = appendFinalResults(event, transcript, onDelta);
   };
   recognition.onaudiostart = () => started.resolve();
-  recognition.onend = succeed;
+  recognition.onend = finish;
   recognition.onerror = (event) => {
     const endedByCaller =
       (event.error === "aborted" || event.error === "audio-capture") && (isCancelled || isStopping);
-    if (event.error === "no-speech" || endedByCaller || transcript) {
-      succeed();
-      return;
-    }
-    fail(new Error(event.error));
+    if (event.error !== "no-speech" && !endedByCaller && !transcript)
+      terminalError = new Error(event.error);
   };
   for (const track of tracks) {
     track.addEventListener("ended", microphoneEnded, { once: true });
