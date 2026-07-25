@@ -31,6 +31,10 @@ function Demo() {
   const [transcriberId, setTranscriberId] = useState<TranscriberId>("openai/gpt-realtime-whisper");
   const [value, setValue] = useState("");
 
+  function appendTranscript(delta: string): void {
+    setValue((current) => [current.trimEnd(), delta.trim()].filter(Boolean).join(" "));
+  }
+
   function onSubmit(event: SubmitEvent<HTMLFormElement>): void {
     event.preventDefault();
   }
@@ -61,9 +65,8 @@ function Demo() {
         <div className="actions">
           <ChatVoiceInput
             disabled={false}
-            onValueChange={setValue}
+            onDelta={appendTranscript}
             transcriber={transcribers[transcriberId].transcriber}
-            value={value}
           />
           <button aria-label="Send" className="submit" type="submit">
             <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 16 16" width="20">

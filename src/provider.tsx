@@ -20,24 +20,22 @@ type ChatVoiceInputContextValue = {
   readonly status: ChatVoiceInputStatus;
   readonly stop: () => Promise<void>;
   readonly stream: MediaStream | undefined;
-  readonly transcript: string;
 };
 
 export type ChatVoiceInputProviderProps = {
   readonly children: ReactNode;
   readonly disabled: boolean;
-  readonly onValueChange: (value: string) => void;
+  readonly onDelta?: (delta: string) => void;
   readonly transcriber?: Transcriber;
-  readonly value: string;
 };
 
 type Session = {
   readonly controller: AbortController;
   readonly removeTrackListeners: Array<() => void>;
+  hasDelta: boolean;
   released: boolean;
   stream: MediaStream | undefined;
   transcription: Transcription | undefined;
-  transcript: string;
 };
 
 type Recording = Session | "error" | "loading" | undefined;
@@ -52,13 +50,6 @@ const microphoneConstraints: MediaStreamConstraints = {
     noiseSuppression: true,
   },
 };
-
-function append(value: string, text: string): string {
-  const suffix = text.trim();
-  if (!suffix) return value;
-  const prefix = value.trimEnd();
-  return prefix ? `${prefix} ${suffix}` : suffix;
-}
 
 function recordingStatus(recording: Recording): ChatVoiceInputStatus {
   if (typeof recording === "object") return "recording";
@@ -85,23 +76,11 @@ export function useChatVoiceInput(): ChatVoiceInputContextValue {
 export function ChatVoiceInputProvider({
   children,
   disabled,
-  onValueChange,
+  onDelta: emitDelta,
   transcriber,
-  value,
 }: ChatVoiceInputProviderProps) {
   const [recording, setRecording] = useState<Recording>();
   const currentSession = useRef<Session | undefined>(undefined);
-  const currentValue = useRef(value);
-
-  useEffect(() => {
-    currentValue.current = value;
-  }, [value]);
-
-  function appendValue(text: string): void {
-    const nextValue = append(currentValue.current, text);
-    currentValue.current = nextValue;
-    onValueChange(nextValue);
-  }
 
   const release = useCallback((session: Session): void => {
     if (!session.released) {
@@ -136,9 +115,8 @@ export function ChatVoiceInputProvider({
     if (currentSession.current !== session) return;
     release(session);
     setRecording(undefined);
-    const finalTranscript = finalText.trim();
-    if (!session.transcript && finalTranscript) {
-      appendValue(finalTranscript);
+    if (!session.hasDelta && finalText.trim()) {
+      emitDelta?.(finalText);
     }
   }
 
@@ -157,11 +135,11 @@ export function ChatVoiceInputProvider({
 
     const session: Session = {
       controller: new AbortController(),
+      hasDelta: false,
       released: false,
       removeTrackListeners: [],
       stream: undefined,
       transcription: undefined,
-      transcript: "",
     };
     currentSession.current = session;
     flushSync(() => setRecording("loading"));
@@ -184,8 +162,8 @@ export function ChatVoiceInputProvider({
       const live = await transcriber.start({
         onDelta(delta) {
           if (currentSession.current !== session) return;
-          session.transcript += delta;
-          appendValue(delta);
+          session.hasDelta = true;
+          emitDelta?.(delta);
         },
         signal: session.controller.signal,
         stream: session.stream,
@@ -231,7 +209,6 @@ export function ChatVoiceInputProvider({
     status: recordingStatus(recording),
     stop,
     stream: isRecording ? recording.stream : undefined,
-    transcript: isRecording ? recording.transcript : "",
   };
   return (
     <ChatVoiceInputContext.Provider value={context}>{children}</ChatVoiceInputContext.Provider>

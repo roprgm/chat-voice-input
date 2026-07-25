@@ -47,19 +47,26 @@ const transcriber = createAiSdkTranscriber();
 function Composer() {
   const [value, setValue] = useState("");
 
+  function appendTranscript(delta: string): void {
+    setValue((current) => [current.trimEnd(), delta.trim()].filter(Boolean).join(" "));
+  }
+
   return (
     <>
       <textarea onChange={(event) => setValue(event.target.value)} value={value} />
       <ChatVoiceInput
         disabled={false}
-        onValueChange={setValue}
+        onDelta={appendTranscript}
         transcriber={transcriber}
-        value={value}
       />
     </>
   );
 }
 ```
+
+`ChatVoiceInput` emits transcription deltas without owning or modifying the editor
+value. This example appends them to the end, but the consumer decides where and how
+to apply each delta.
 
 The adapter requests a short-lived token from `POST /api/transcription`. Add that
 route to your server:
@@ -146,9 +153,8 @@ import ChatVoiceInput, { useChatVoiceInput } from "chat-voice-input";
 
 <ChatVoiceInput.Provider
   disabled={disabled}
-  onValueChange={setValue}
+  onDelta={appendTranscript}
   transcriber={transcriber}
-  value={value}
 >
   <ChatVoiceInput.Error />
   <ChatVoiceInput.Waveform />
@@ -157,7 +163,7 @@ import ChatVoiceInput, { useChatVoiceInput } from "chat-voice-input";
 </ChatVoiceInput.Provider>;
 ```
 
-`useChatVoiceInput()` exposes `status`, `transcript`, `stream`, `start`, and `stop`.
+`useChatVoiceInput()` exposes `status`, `stream`, `start`, and `stop`.
 Every component is also available as a named export.
 
 The optional stylesheet contains only the built-in control styles and exposes
@@ -179,14 +185,14 @@ failure shows `Voice input is unavailable.` and changes the button to Retry.
 | User denies microphone permission | Rejects the start; shows the error and Retry |
 | Native transcriber is selected but unavailable | Rejects before requesting the microphone; shows the error and Retry |
 | Microphone is unavailable or busy | Rejects the start; shows the error and Retry |
-| Transcriber emits text | Updates the value immediately |
+| Transcriber emits text | Calls `onDelta` immediately |
 | User presses Stop | Stops capture; shows Loading until final text settles |
-| Its containing form is submitted | Stops an active or pending session; keeps the current value |
-| Transcriber finishes on its own | Stops capture, applies final text, and returns to idle |
-| Transcriber ends without text | Keeps the current value; returns to idle without an error |
+| Its containing form is submitted | Stops an active or pending session |
+| Transcriber finishes on its own | Stops capture, emits final text if no deltas arrived, and returns to idle |
+| Transcriber ends without text | Returns to idle without an error or delta |
 | Remote transcriber is still connecting | Captures audio; shows recording only after the adapter confirms it started |
-| Transcriber fails during recording | Aborts capture; keeps emitted text; shows the error and Retry |
-| Microphone disconnects during recording | Aborts transcription; keeps emitted text; shows the error and Retry |
+| Transcriber fails during recording | Aborts capture; does not retract emitted deltas; shows the error and Retry |
+| Microphone disconnects during recording | Aborts transcription; does not retract emitted deltas; shows the error and Retry |
 | Voice input is disabled or unmounted while active | Aborts capture and ignores late results |
 
 ## iOS limitation
