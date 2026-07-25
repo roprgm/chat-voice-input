@@ -33,6 +33,10 @@
       "types": "./dist/server.d.ts",
       "import": "./dist/server.js"
     },
+    "./audio": {
+      "types": "./dist/audio.d.ts",
+      "import": "./dist/audio.js"
+    },
     "./ai-sdk": {
       "types": "./dist/transcribers/ai-sdk.d.ts",
       "import": "./dist/ai-sdk.js"
@@ -70,7 +74,8 @@
   "peerDependencies": {
     "@ai-sdk/gateway": "^4.0.0",
     "ai": "^7.0.0",
-    "react": ">=18.0.0"
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
   },
   "peerDependenciesMeta": {
     "@ai-sdk/gateway": {

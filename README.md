@@ -74,7 +74,8 @@ export function POST(): Promise<Response> {
 }
 ```
 
-The adapter requests the microphone and token in parallel. Audio captured while the
+The provider requests the microphone immediately. The adapter starts capturing PCM
+and requests its token as soon as the stream is available. Audio captured while the
 token is pending is consumed when transcription connects.
 
 Keep `AI_GATEWAY_API_KEY` on the server. Protect the token route with authentication
@@ -100,8 +101,9 @@ const transcriber = createNativeTranscriber({ language: "es-ES" });
 ```
 
 This adapter uses `SpeechRecognition` or `webkitSpeechRecognition`, so availability
-and transcription quality depend on the browser. It opens a microphone stream for
-the waveform and closes it when transcription stops, aborts, or finishes.
+and transcription quality depend on the browser. On WebKit, speech recognition
+controls its own audio capture because the browser API cannot consume a provided
+`MediaStream`.
 
 ## Use a custom transcriber
 
@@ -111,23 +113,31 @@ Implement the small `Transcriber` contract and pass the object to the component:
 import type { Transcriber } from "chat-voice-input";
 
 const transcriber: Transcriber = {
-  async start(onDelta, signal) {
-    const recording = await startYourTranscription({ onDelta, signal });
+  async start({ stream, onDelta, signal }) {
+    const recording = await startYourTranscription({ stream, onDelta, signal });
 
     return {
-      captureEnded: recording.captureEnded,
       stop: recording.stop,
-      stream: recording.stream,
       text: recording.text,
     };
   },
 };
 ```
 
-`start` returns a stop function, an optional `MediaStream`, and a promise for the
-final text. It can also return an optional `captureEnded` promise so recording UI
-stops while final text is still being processed. The waveform and timer appear when
-`stream` is present.
+The provider opens and closes the microphone. The transcriber receives that stream
+with an abort signal and a callback for text deltas. It returns a stop function and
+a promise for the final text.
+
+If your service needs PCM, use the same converter as the AI SDK adapter:
+
+```ts
+import { createPcmStream } from "chat-voice-input/audio";
+
+const pcm = await createPcmStream(stream); // 24 kHz s16le by default
+```
+
+Pass `{ sampleRate }` to select another rate. Closing the PCM stream releases only
+its audio graph; microphone ownership stays with the provider.
 
 ## Compose your own layout
 
@@ -165,17 +175,16 @@ failure shows `Voice input is unavailable.` and changes the button to Retry.
 | --- | --- |
 | Voice input is disabled | Disables Start; does not call the transcriber |
 | Waiting for microphone permission or transcriber start | Shows Loading; disables the button; shows no recording UI |
-| Capture is active | Shows Stop, waveform, and timer when a stream is available |
+| Capture and transcription are active | Shows Stop, waveform, and timer |
 | User denies microphone permission | Rejects the start; shows the error and Retry |
+| Native transcriber is selected but unavailable | Rejects before requesting the microphone; shows the error and Retry |
+| Microphone is unavailable or busy | Rejects the start; shows the error and Retry |
 | Transcriber emits text | Updates the value immediately |
 | User presses Stop | Stops capture; shows Loading until final text settles |
-| Capture ends before final text | Hides recording UI; shows Loading until final text settles |
 | Transcriber ends without text | Keeps the current value; returns to idle without an error |
-| Active capture returns while a remote transcriber connects | Shows recording because the microphone is active; the adapter owns captured audio |
-| Microphone is unavailable or busy | Rejects the start; shows the error and Retry |
-| Native transcriber is selected but unavailable | Rejects before requesting the microphone; shows the error and Retry |
+| Remote transcriber is still connecting | Captures audio; shows recording only after the adapter confirms it started |
 | Transcriber fails during recording | Aborts capture; keeps emitted text; shows the error and Retry |
-| Transcriber reports a microphone disconnect | Aborts capture; keeps emitted text; shows the error and Retry |
+| Microphone disconnects during recording | Aborts transcription; keeps emitted text; shows the error and Retry |
 | Voice input is disabled or unmounted while active | Aborts capture and ignores late results |
 
 ## Development

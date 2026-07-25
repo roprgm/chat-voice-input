@@ -1,10 +1,15 @@
 export type Transcription = {
-  readonly captureEnded?: Promise<void>;
-  readonly stop: () => void;
-  readonly stream: MediaStream | undefined;
+  readonly stop: () => void | Promise<void>;
   readonly text: Promise<string>;
 };
 
+export type TranscriberInput = {
+  readonly onDelta: (delta: string) => void;
+  readonly signal: AbortSignal;
+  readonly stream: MediaStream;
+};
+
 export type Transcriber = {
-  readonly start: (onDelta: (delta: string) => void, signal: AbortSignal) => Promise<Transcription>;
+  readonly isSupported?: () => boolean;
+  readonly start: (input: TranscriberInput) => Promise<Transcription>;
 };

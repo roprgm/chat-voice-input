@@ -31,5 +31,5 @@ export {
   useChatVoiceInput,
 } from "./provider";
 export { createNativeTranscriber, type NativeTranscriberOptions } from "./transcribers/native";
-export type { Transcriber, Transcription } from "./transcribers/types";
+export type { Transcriber, TranscriberInput, Transcription } from "./transcribers/types";
 export { ChatVoiceInputButton, ChatVoiceInputError, ChatVoiceInputTimer, ChatVoiceInputWaveform };

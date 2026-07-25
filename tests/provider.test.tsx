@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ChatVoiceInputButton, ChatVoiceInputError } from "../src/controls";
 import { ChatVoiceInputProvider } from "../src/provider";
-import type { Transcriber, Transcription } from "../src/transcribers/types";
+import type { Transcriber, TranscriberInput, Transcription } from "../src/transcribers/types";
 
 function deferred<T>() {
   let reject!: (reason?: unknown) => void;
@@ -15,17 +15,34 @@ function deferred<T>() {
   return { promise, reject, resolve };
 }
 
-function createRecording(options?: { readonly captureEnded?: Promise<void> }) {
+class FakeMicrophoneTrack extends EventTarget {
+  stop = vi.fn();
+
+  disconnect(): void {
+    this.dispatchEvent(new Event("ended"));
+  }
+}
+
+function microphone(permission?: Promise<MediaStream>) {
+  const track = new FakeMicrophoneTrack();
+  const stream = { getTracks: () => [track] } as unknown as MediaStream;
+  const getUserMedia = vi.fn().mockReturnValue(permission ?? Promise.resolve(stream));
+  vi.stubGlobal("navigator", { mediaDevices: { getUserMedia } });
+  return { getUserMedia, stream, track };
+}
+
+function recording() {
   const text = deferred<string>();
   const stop = vi.fn();
-  const transcription = {
-    ...options,
-    stop,
-    stream: {} as MediaStream,
-    text: text.promise,
-  } satisfies Transcription;
-  const start = vi.fn().mockResolvedValue(transcription);
+  const transcription = { stop, text: text.promise } satisfies Transcription;
+  const start = vi.fn(async (_input: TranscriberInput) => transcription);
   return { start, stop, text, transcriber: { start } satisfies Transcriber };
+}
+
+function firstInput(start: ReturnType<typeof vi.fn>): TranscriberInput {
+  const input = start.mock.calls[0]?.[0] as TranscriberInput | undefined;
+  if (!input) throw new Error("Expected the transcriber to start.");
+  return input;
 }
 
 function renderVoiceInput({
@@ -39,7 +56,7 @@ function renderVoiceInput({
   readonly transcriber: Transcriber;
   readonly value?: string;
 }) {
-  render(
+  return render(
     <ChatVoiceInputProvider
       disabled={disabled}
       onValueChange={onValueChange}
@@ -52,141 +69,252 @@ function renderVoiceInput({
   );
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe("voice input provider", () => {
-  describe("starting", () => {
-    it("does not start while disabled", () => {
-      const session = createRecording();
-      renderVoiceInput({ disabled: true, transcriber: session.transcriber });
+  it("does nothing while voice input is disabled", () => {
+    const mic = microphone();
+    const session = recording();
+    renderVoiceInput({ disabled: true, transcriber: session.transcriber });
 
-      fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
 
-      expect(session.start).not.toHaveBeenCalled();
+    expect(mic.getUserMedia).not.toHaveBeenCalled();
+    expect(session.start).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unsupported local transcriber before requesting the microphone", async () => {
+    const mic = microphone();
+    const transcriber = {
+      isSupported: () => false,
+      start: vi.fn(),
+    } satisfies Transcriber;
+    renderVoiceInput({ transcriber });
+
+    fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
+
+    expect((await screen.findByRole("alert")).textContent).toBe("Voice input is unavailable.");
+    expect(mic.getUserMedia).not.toHaveBeenCalled();
+  });
+
+  it("renders Loading before requesting microphone permission", () => {
+    const session = recording();
+    const getUserMedia = vi.fn(() => {
+      expect(screen.getByRole("button", { name: "Loading voice input" })).toBeTruthy();
+      return new Promise<MediaStream>(() => undefined);
     });
+    vi.stubGlobal("navigator", { mediaDevices: { getUserMedia } });
+    renderVoiceInput({ transcriber: session.transcriber });
 
-    it("shows loading while the transcriber requests access", () => {
-      const transcriber = {
-        start: vi.fn(() => new Promise<never>(() => undefined)),
-      } satisfies Transcriber;
-      renderVoiceInput({ transcriber });
+    fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
 
-      fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
+    expect(getUserMedia).toHaveBeenCalledOnce();
+    expect(session.start).not.toHaveBeenCalled();
+  });
 
-      expect(
-        screen.getByRole("button", { name: "Loading voice input" }).hasAttribute("disabled"),
-      ).toBe(true);
-      expect(screen.queryByRole("button", { name: "Stop voice input" })).toBeNull();
-    });
+  it("keeps Loading visible while microphone permission is pending", () => {
+    const permission = new Promise<MediaStream>(() => undefined);
+    microphone(permission);
+    const session = recording();
+    renderVoiceInput({ transcriber: session.transcriber });
 
-    it("shows a retry action when the transcriber cannot start", async () => {
-      const transcriber = {
-        start: vi.fn().mockRejectedValue(new Error("transcriber error")),
-      } satisfies Transcriber;
-      renderVoiceInput({ transcriber });
+    fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
 
-      fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
+    expect(screen.getByRole("button", { name: "Loading voice input" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Stop voice input" })).toBeNull();
+  });
 
-      expect((await screen.findByRole("alert")).textContent).toBe("Voice input is unavailable.");
-      expect(
-        screen.getByRole("button", { name: "Retry voice input" }).hasAttribute("disabled"),
-      ).toBe(false);
+  it("shows Retry when microphone permission is denied", async () => {
+    microphone(Promise.reject(new DOMException("denied", "NotAllowedError")));
+    const session = recording();
+    renderVoiceInput({ transcriber: session.transcriber });
+
+    fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
+
+    expect((await screen.findByRole("alert")).textContent).toBe("Voice input is unavailable.");
+    expect(screen.getByRole("button", { name: "Retry voice input" })).toBeTruthy();
+    expect(session.start).not.toHaveBeenCalled();
+  });
+
+  it("shows Retry when the microphone API is unavailable", async () => {
+    vi.stubGlobal("navigator", {});
+    const session = recording();
+    renderVoiceInput({ transcriber: session.transcriber });
+
+    fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
+
+    expect((await screen.findByRole("alert")).textContent).toBe("Voice input is unavailable.");
+    expect(session.start).not.toHaveBeenCalled();
+  });
+
+  it("keeps Loading visible while the transcriber starts", async () => {
+    const mic = microphone();
+    const transcriber = {
+      start: vi.fn(() => new Promise<Transcription>(() => undefined)),
+    } satisfies Transcriber;
+    renderVoiceInput({ transcriber });
+
+    fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
+
+    await waitFor(() => expect(transcriber.start).toHaveBeenCalledOnce());
+    expect(screen.getByRole("button", { name: "Loading voice input" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Stop voice input" })).toBeNull();
+    expect(mic.track.stop).not.toHaveBeenCalled();
+  });
+
+  it("releases the microphone and shows Retry when the transcriber cannot start", async () => {
+    const mic = microphone();
+    const transcriber = {
+      start: vi.fn().mockRejectedValue(new Error("transcriber unavailable")),
+    } satisfies Transcriber;
+    renderVoiceInput({ transcriber });
+
+    fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
+
+    expect((await screen.findByRole("alert")).textContent).toBe("Voice input is unavailable.");
+    expect(mic.track.stop).toHaveBeenCalledOnce();
+  });
+
+  it("passes the captured stream to the transcriber before showing Stop", async () => {
+    const mic = microphone();
+    const session = recording();
+    renderVoiceInput({ transcriber: session.transcriber });
+
+    fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
+    await screen.findByRole("button", { name: "Stop voice input" });
+
+    expect(session.start).toHaveBeenCalledWith({
+      onDelta: expect.any(Function),
+      signal: expect.any(AbortSignal),
+      stream: mic.stream,
     });
   });
 
-  describe("recording", () => {
-    it("streams transcript deltas into the current value", async () => {
-      const text = deferred<string>();
-      const onValueChange = vi.fn();
-      const transcriber: Transcriber = {
-        async start(onDelta) {
-          onDelta("hello");
-          onDelta(" world");
-          return { stop: vi.fn(), stream: {} as MediaStream, text: text.promise };
-        },
-      };
-      renderVoiceInput({ onValueChange, transcriber, value: "Draft:" });
+  it("streams transcript deltas into the current value", async () => {
+    microphone();
+    const text = deferred<string>();
+    const onValueChange = vi.fn();
+    const transcriber: Transcriber = {
+      async start({ onDelta }) {
+        onDelta("hello");
+        onDelta(" world");
+        return { stop: vi.fn(), text: text.promise };
+      },
+    };
+    renderVoiceInput({ onValueChange, transcriber, value: "Draft:" });
 
-      fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
-      await screen.findByRole("button", { name: "Stop voice input" });
+    fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
+    await screen.findByRole("button", { name: "Stop voice input" });
 
-      expect(onValueChange.mock.calls).toEqual([["Draft: hello"], ["Draft: hello world"]]);
-      text.resolve("hello world");
-      await screen.findByRole("button", { name: "Start voice input" });
-    });
-
-    it("stops the active transcriber and applies its final text", async () => {
-      const session = createRecording();
-      const onValueChange = vi.fn();
-      renderVoiceInput({ onValueChange, transcriber: session.transcriber });
-
-      fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
-      fireEvent.click(await screen.findByRole("button", { name: "Stop voice input" }));
-      session.text.resolve("hello world");
-
-      await waitFor(() => expect(onValueChange).toHaveBeenCalledWith("hello world"));
-      expect(session.stop).toHaveBeenCalledOnce();
-      expect(session.start).toHaveBeenCalledWith(expect.any(Function), expect.any(AbortSignal));
-    });
-
-    it("stops reporting recording while final text is pending", async () => {
-      const captureEnded = deferred<void>();
-      const session = createRecording({ captureEnded: captureEnded.promise });
-      renderVoiceInput({ transcriber: session.transcriber });
-
-      fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
-      await screen.findByRole("button", { name: "Stop voice input" });
-      captureEnded.resolve();
-
-      await screen.findByRole("button", { name: "Loading voice input" });
-      session.text.resolve("");
-      await screen.findByRole("button", { name: "Start voice input" });
-    });
+    expect(onValueChange.mock.calls).toEqual([["Draft: hello"], ["Draft: hello world"]]);
+    text.resolve("hello world");
+    await screen.findByRole("button", { name: "Start voice input" });
   });
 
-  describe("completion", () => {
-    it("returns to idle when transcription ends on its own", async () => {
-      const session = createRecording();
-      renderVoiceInput({ transcriber: session.transcriber });
+  it("stops capture immediately and waits for the final text", async () => {
+    const mic = microphone();
+    const session = recording();
+    const onValueChange = vi.fn();
+    renderVoiceInput({ onValueChange, transcriber: session.transcriber });
 
-      fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
-      await screen.findByRole("button", { name: "Stop voice input" });
-      session.text.resolve("");
+    fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Stop voice input" }));
 
-      await screen.findByRole("button", { name: "Start voice input" });
-      expect(screen.queryByRole("alert")).toBeNull();
+    expect(session.stop).toHaveBeenCalledOnce();
+    expect(mic.track.stop).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: "Loading voice input" })).toBeTruthy();
+
+    session.text.resolve("hello world");
+    await waitFor(() => expect(onValueChange).toHaveBeenCalledWith("hello world"));
+    await screen.findByRole("button", { name: "Start voice input" });
+  });
+
+  it("returns to idle without an error when the user stops without speaking", async () => {
+    microphone();
+    const session = recording();
+    const onValueChange = vi.fn();
+    renderVoiceInput({
+      onValueChange,
+      transcriber: session.transcriber,
+      value: "existing text",
     });
 
-    it("preserves the current value when the user stops without speaking", async () => {
-      const session = createRecording();
-      const onValueChange = vi.fn();
-      renderVoiceInput({
-        onValueChange,
-        transcriber: session.transcriber,
-        value: "existing text",
-      });
+    fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Stop voice input" }));
+    session.text.resolve("");
 
-      fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
-      fireEvent.click(await screen.findByRole("button", { name: "Stop voice input" }));
-      session.text.resolve("");
+    await screen.findByRole("button", { name: "Start voice input" });
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
 
-      await screen.findByRole("button", { name: "Start voice input" });
-      expect(screen.queryByRole("alert")).toBeNull();
-      expect(onValueChange).not.toHaveBeenCalled();
-    });
+  it("releases the microphone when transcription ends on its own", async () => {
+    const mic = microphone();
+    const session = recording();
+    renderVoiceInput({ transcriber: session.transcriber });
 
-    it("shows a retry action when active transcription fails", async () => {
-      const session = createRecording();
-      renderVoiceInput({ transcriber: session.transcriber });
+    fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
+    await screen.findByRole("button", { name: "Stop voice input" });
+    session.text.resolve("");
 
-      fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
-      await screen.findByRole("button", { name: "Stop voice input" });
-      session.text.reject(new Error("recognition failed"));
+    await screen.findByRole("button", { name: "Start voice input" });
+    expect(mic.track.stop).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
 
-      expect((await screen.findByRole("alert")).textContent).toBe("Voice input is unavailable.");
-      expect(
-        screen.getByRole("button", { name: "Retry voice input" }).hasAttribute("disabled"),
-      ).toBe(false);
-    });
+  it("aborts capture and shows Retry when the transcriber fails", async () => {
+    const mic = microphone();
+    const session = recording();
+    renderVoiceInput({ transcriber: session.transcriber });
+
+    fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
+    await screen.findByRole("button", { name: "Stop voice input" });
+    const { signal } = firstInput(session.start);
+    session.text.reject(new Error("transcription failed"));
+
+    expect((await screen.findByRole("alert")).textContent).toBe("Voice input is unavailable.");
+    expect(signal.aborted).toBe(true);
+    expect(mic.track.stop).toHaveBeenCalledOnce();
+  });
+
+  it("aborts transcription and shows Retry when the microphone disconnects", async () => {
+    const mic = microphone();
+    const session = recording();
+    renderVoiceInput({ transcriber: session.transcriber });
+
+    fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
+    await screen.findByRole("button", { name: "Stop voice input" });
+    const { signal } = firstInput(session.start);
+    mic.track.disconnect();
+
+    expect((await screen.findByRole("alert")).textContent).toBe("Voice input is unavailable.");
+    expect(signal.aborted).toBe(true);
+  });
+
+  it("releases the microphone when disabled during recording", async () => {
+    const mic = microphone();
+    const session = recording();
+    const view = renderVoiceInput({ transcriber: session.transcriber });
+
+    fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
+    await screen.findByRole("button", { name: "Stop voice input" });
+    const { signal } = firstInput(session.start);
+    view.rerender(
+      <ChatVoiceInputProvider
+        disabled
+        onValueChange={vi.fn()}
+        transcriber={session.transcriber}
+        value=""
+      >
+        <ChatVoiceInputError />
+        <ChatVoiceInputButton />
+      </ChatVoiceInputProvider>,
+    );
+
+    await waitFor(() => expect(signal.aborted).toBe(true));
+    expect(mic.track.stop).toHaveBeenCalledOnce();
   });
 });

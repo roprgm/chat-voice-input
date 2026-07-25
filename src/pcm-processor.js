@@ -3,7 +3,8 @@
 const frameSize = Math.round(sampleRate * 0.02);
 
 class PcmProcessor extends AudioWorkletProcessor {
-  frame = new Int16Array(frameSize);
+  frame = new ArrayBuffer(frameSize * 2);
+  view = new DataView(this.frame);
   offset = 0;
 
   process(inputs) {
@@ -12,12 +13,14 @@ class PcmProcessor extends AudioWorkletProcessor {
 
     for (let index = 0; index < input.length; index += 1) {
       const sample = Math.max(-1, Math.min(1, input[index]));
-      this.frame[this.offset] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+      const value = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+      this.view.setInt16(this.offset * 2, value, true);
       this.offset += 1;
 
       if (this.offset === frameSize) {
-        this.port.postMessage(this.frame.buffer, [this.frame.buffer]);
-        this.frame = new Int16Array(frameSize);
+        this.port.postMessage(this.frame, [this.frame]);
+        this.frame = new ArrayBuffer(frameSize * 2);
+        this.view = new DataView(this.frame);
         this.offset = 0;
       }
     }

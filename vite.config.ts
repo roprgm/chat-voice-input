@@ -8,6 +8,7 @@ export default defineConfig({
     lib: {
       entry: {
         "ai-sdk": fileURLToPath(new URL("./src/transcribers/ai-sdk.ts", import.meta.url)),
+        audio: fileURLToPath(new URL("./src/audio.ts", import.meta.url)),
         index: fileURLToPath(new URL("./src/index.tsx", import.meta.url)),
         server: fileURLToPath(new URL("./src/server.ts", import.meta.url)),
         style: fileURLToPath(new URL("./src/styles.css", import.meta.url)),
@@ -16,7 +17,7 @@ export default defineConfig({
       formats: ["es"],
     },
     rolldownOptions: {
-      external: ["@ai-sdk/gateway", "ai", "react", "react/jsx-runtime"],
+      external: ["@ai-sdk/gateway", "ai", "react", "react-dom", "react/jsx-runtime"],
     },
     sourcemap: true,
     target: "es2022",
