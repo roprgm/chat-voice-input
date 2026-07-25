@@ -1,8 +1,7 @@
 # Chat Voice Input
 
-Chat Voice Input is a composable React voice input for controlled values. It streams
-transcript deltas into your value and includes a microphone button, waveform, timer,
-and loading, recording, and error states.
+A composable voice input with a microphone button, live waveform, timer, and built-in
+loading, recording, and error states.
 
 Use the AI SDK adapter, native browser speech recognition, or connect any service or
 local model through the `Transcriber` interface. The component coordinates capture,
