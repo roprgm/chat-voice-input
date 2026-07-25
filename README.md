@@ -158,22 +158,26 @@ theming. The component does not own its surrounding layout.
 
 ## Covered edge cases
 
-`ChatVoiceInputProvider` handles every `Transcriber` the same way. Failures show
-`Voice input is unavailable.` and change the microphone button to Retry.
+`ChatVoiceInputProvider` handles every `Transcriber` through the same lifecycle.
+Adapters report microphone and transcription failures through that contract. Any
+failure shows `Voice input is unavailable.` and changes the button to Retry.
 
-| Case | Behavior |
+| Scenario | Behavior |
 | --- | --- |
-| Disabled before start | Does not call `start` |
-| `start` pending | Shows loading; disables the button |
-| `start` resolves | Shows Stop; shows waveform and timer when `stream` is present |
-| `onDelta` emits text | Updates the value immediately |
-| `captureEnded` resolves | Hides recording UI; shows loading until `text` settles |
-| `captureEnded` omitted | Shows recording until `text` settles or Stop is pressed |
-| Stop pressed | Calls `stop`; shows loading until `text` settles |
-| `text` resolves with text | Applies final text; returns to idle |
-| `text` resolves empty | Keeps the current value; returns to idle without an error |
-| Start, stop, capture, or text fails | Aborts the signal; keeps emitted text; shows the error |
-| Disabled or unmounted while active | Aborts the signal |
+| Voice input is disabled | Disables Start; does not call the transcriber |
+| Transcriber is locally unavailable | Rejects before requesting the microphone; shows the error and Retry |
+| Waiting for microphone permission | Shows Loading; disables the button; shows no recording UI |
+| Microphone is unavailable, busy, or denied | Rejects the start; shows the error and Retry |
+| Transcriber start is still pending | Shows Loading; disables the button; shows no recording UI |
+| Active capture returns while a remote transcriber connects | Shows recording because the microphone is active; the adapter owns captured audio |
+| Capture is active | Shows Stop, waveform, and timer when a stream is available |
+| Transcriber emits text | Updates the value immediately |
+| User presses Stop | Stops capture; shows Loading until final text settles |
+| Capture ends before final text | Hides recording UI; shows Loading until final text settles |
+| Transcriber ends without text | Keeps the current value; returns to idle without an error |
+| Transcriber reports a microphone disconnect | Aborts capture; keeps emitted text; shows the error and Retry |
+| Transcriber fails during recording | Aborts capture; keeps emitted text; shows the error and Retry |
+| Voice input is disabled or unmounted while active | Aborts capture and ignores late results |
 
 ## Development
 
