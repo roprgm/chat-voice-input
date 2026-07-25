@@ -1,118 +1,212 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createNativeTranscriber } from "../src/transcribers/native";
+import type { Transcription } from "../src/transcribers/types";
 
-type FakeSpeechRecognitionResult = {
+type RecognitionResult = {
   readonly 0?: { readonly transcript: string };
   readonly isFinal: boolean;
 };
 
-type FakeSpeechRecognitionEvent = {
+type RecognitionEvent = {
   readonly resultIndex: number;
-  readonly results: readonly FakeSpeechRecognitionResult[];
+  readonly results: readonly RecognitionResult[];
 };
 
-class FakeSpeechRecognition {
-  static instance: FakeSpeechRecognition | undefined;
+class FakeRecognition {
+  static autoStartAudio = true;
+  static instance: FakeRecognition | undefined;
 
   continuous = false;
   lang = "";
+  onaudioend: (() => void) | null = null;
+  onaudiostart: (() => void) | null = null;
   onend: (() => void) | null = null;
   onerror: ((event: { readonly error: string }) => void) | null = null;
-  onresult: ((event: FakeSpeechRecognitionEvent) => void) | null = null;
+  onresult: ((event: RecognitionEvent) => void) | null = null;
   abort = vi.fn(() => this.onend?.());
-  start = vi.fn();
+  start = vi.fn(() => {
+    if (FakeRecognition.autoStartAudio) this.onaudiostart?.();
+  });
   stop = vi.fn();
 
   constructor() {
-    FakeSpeechRecognition.instance = this;
+    FakeRecognition.instance = this;
   }
 
-  emit(...results: readonly FakeSpeechRecognitionResult[]): void {
+  emitError(error: string): void {
+    this.onerror?.({ error });
+  }
+
+  emitResults(...results: readonly RecognitionResult[]): void {
     this.onresult?.({ resultIndex: 0, results });
   }
 }
 
-function activeRecognition(): FakeSpeechRecognition {
-  const recognition = FakeSpeechRecognition.instance;
-  if (!recognition) {
-    throw new Error("Expected speech recognition to be active.");
-  }
-  return recognition;
+class FakeMicrophoneTrack extends EventTarget {
+  stop = vi.fn();
 }
 
-function stubMicrophone(language: string): {
-  readonly getUserMedia: ReturnType<typeof vi.fn>;
-  readonly stopTrack: ReturnType<typeof vi.fn>;
-  readonly stream: MediaStream;
-} {
-  const stopTrack = vi.fn();
-  const stream = {
-    getTracks: () => [{ stop: stopTrack }],
-  } as unknown as MediaStream;
-  const getUserMedia = vi.fn().mockResolvedValue(stream);
-  vi.stubGlobal("navigator", {
-    language,
-    mediaDevices: { getUserMedia },
+type Session = {
+  readonly controller: AbortController;
+  readonly onDelta: ReturnType<typeof vi.fn>;
+  readonly recognition: FakeRecognition;
+  readonly track: FakeMicrophoneTrack;
+  readonly transcription: Transcription;
+};
+
+function recognition(): FakeRecognition {
+  if (!FakeRecognition.instance) throw new Error("Expected speech recognition to be active.");
+  return FakeRecognition.instance;
+}
+
+function installRecognition(api: "standard" | "webkit" = "standard"): void {
+  vi.stubGlobal("SpeechRecognition", api === "standard" ? FakeRecognition : undefined);
+  vi.stubGlobal("webkitSpeechRecognition", api === "webkit" ? FakeRecognition : undefined);
+}
+
+function mediaStream() {
+  const track = new FakeMicrophoneTrack();
+  const stream = { getTracks: () => [track] } as unknown as MediaStream;
+  return { stream, track };
+}
+
+async function startSession(options?: {
+  readonly api?: "standard" | "webkit";
+  readonly browserLanguage?: string;
+}): Promise<Session> {
+  installRecognition(options?.api);
+  vi.stubGlobal("navigator", { language: options?.browserLanguage ?? "en-US" });
+  const { stream, track } = mediaStream();
+  const controller = new AbortController();
+  const onDelta = vi.fn();
+  const transcription = await createNativeTranscriber().start({
+    onDelta,
+    signal: controller.signal,
+    stream,
   });
-  return { getUserMedia, stopTrack, stream };
+  return { controller, onDelta, recognition: recognition(), track, transcription };
 }
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  FakeSpeechRecognition.instance = undefined;
+  FakeRecognition.autoStartAudio = true;
+  FakeRecognition.instance = undefined;
 });
 
-describe("createNativeTranscriber", () => {
-  it("streams final browser results and returns the complete transcript", async () => {
-    vi.stubGlobal("SpeechRecognition", FakeSpeechRecognition);
-    const microphone = stubMicrophone("en-US");
-    const onDelta = vi.fn();
-    const transcriber = createNativeTranscriber({ language: "es-ES" });
+describe("native transcriber", () => {
+  it("supports the prefixed WebKit recognition API", async () => {
+    const session = await startSession({ api: "webkit", browserLanguage: "es-ES" });
 
-    const transcription = await transcriber.start(onDelta, new AbortController().signal);
-    const recognition = activeRecognition();
-    recognition.emit(
+    expect(session.recognition.lang).toBe("es-ES");
+    session.controller.abort();
+    await expect(session.transcription.text).resolves.toBe("");
+  });
+
+  it("waits for confirmed recognition capture before starting", async () => {
+    installRecognition();
+    FakeRecognition.autoStartAudio = false;
+    vi.stubGlobal("navigator", { language: "en-US" });
+    const { stream } = mediaStream();
+    let hasStarted = false;
+
+    const pending = createNativeTranscriber()
+      .start({ onDelta: vi.fn(), signal: new AbortController().signal, stream })
+      .then((session) => {
+        hasStarted = true;
+        return session;
+      });
+    await vi.waitFor(() => expect(recognition().start).toHaveBeenCalledOnce());
+
+    expect(hasStarted).toBe(false);
+    recognition().onaudiostart?.();
+
+    const session = await pending;
+    expect(hasStarted).toBe(true);
+    recognition().onend?.();
+    await session.text;
+  });
+
+  it("does not take ownership of the provided microphone stream", async () => {
+    const session = await startSession();
+
+    session.controller.abort();
+
+    expect(session.recognition.abort).toHaveBeenCalledOnce();
+    expect(session.track.stop).not.toHaveBeenCalled();
+    await expect(session.transcription.text).resolves.toBe("");
+  });
+
+  it("streams final results, ignores interim results, and returns complete text", async () => {
+    const session = await startSession();
+    session.recognition.emitResults(
       { 0: { transcript: " hola " }, isFinal: true },
       { 0: { transcript: "ignored" }, isFinal: false },
       { 0: { transcript: "mundo" }, isFinal: true },
     );
-    recognition.onend?.();
 
-    expect(recognition.continuous).toBe(true);
-    expect(recognition.lang).toBe("es-ES");
-    expect(recognition.start).toHaveBeenCalledOnce();
-    expect(microphone.getUserMedia).toHaveBeenCalledWith({ audio: true });
-    expect(onDelta.mock.calls).toEqual([["hola"], [" mundo"]]);
-    expect(transcription.stream).toBe(microphone.stream);
+    session.transcription.stop();
+    session.recognition.onend?.();
 
-    transcription.stop();
-    expect(recognition.stop).toHaveBeenCalledOnce();
-    expect(microphone.stopTrack).toHaveBeenCalledOnce();
-    await expect(transcription.text).resolves.toBe("hola mundo");
+    expect(session.onDelta.mock.calls).toEqual([["hola"], [" mundo"]]);
+    expect(session.recognition.stop).toHaveBeenCalledOnce();
+    expect(session.track.stop).not.toHaveBeenCalled();
+    await expect(session.transcription.text).resolves.toBe("hola mundo");
   });
 
-  it("aborts browser recognition with its signal", async () => {
-    vi.stubGlobal("webkitSpeechRecognition", FakeSpeechRecognition);
-    const microphone = stubMicrophone("es-ES");
-    const controller = new AbortController();
-    const transcription = await createNativeTranscriber().start(vi.fn(), controller.signal);
-    const recognition = activeRecognition();
+  it("ends successfully when recognition returns no text", async () => {
+    const session = await startSession();
 
-    expect(recognition.lang).toBe("es-ES");
-    controller.abort();
+    session.recognition.onend?.();
 
-    expect(recognition.abort).toHaveBeenCalledOnce();
-    expect(microphone.stopTrack).toHaveBeenCalledOnce();
-    await expect(transcription.text).resolves.toBe("");
+    await expect(session.transcription.text).resolves.toBe("");
   });
 
-  it("rejects when browser speech recognition is unavailable", async () => {
-    vi.stubGlobal("SpeechRecognition", undefined);
-    vi.stubGlobal("webkitSpeechRecognition", undefined);
+  it("treats no speech as a successful empty recording", async () => {
+    const session = await startSession();
 
-    await expect(
-      createNativeTranscriber().start(vi.fn(), new AbortController().signal),
-    ).rejects.toThrow("Speech recognition is unavailable in this browser.");
+    session.recognition.emitError("no-speech");
+    session.recognition.onend?.();
+
+    await expect(session.transcription.text).resolves.toBe("");
+  });
+
+  it.each(["aborted", "audio-capture"])(
+    "ignores %s when it arrives after the user presses Stop",
+    async (error) => {
+      const session = await startSession();
+
+      session.transcription.stop();
+      session.recognition.emitError(error);
+      session.recognition.onend?.();
+
+      await expect(session.transcription.text).resolves.toBe("");
+    },
+  );
+
+  it("keeps valid text when recognition later reports an error", async () => {
+    const session = await startSession();
+    session.recognition.emitResults({ 0: { transcript: "hello" }, isFinal: true });
+
+    session.recognition.emitError("network");
+    session.recognition.onend?.();
+
+    expect(session.onDelta).toHaveBeenCalledWith("hello");
+    await expect(session.transcription.text).resolves.toBe("hello");
+  });
+
+  it("fails on an unexpected recognition error", async () => {
+    const session = await startSession();
+    const settled = vi.fn();
+    void session.transcription.text.then(settled, settled);
+
+    session.recognition.emitError("network");
+    await Promise.resolve();
+
+    expect(settled).not.toHaveBeenCalled();
+
+    session.recognition.onend?.();
+
+    await expect(session.transcription.text).rejects.toThrow("network");
   });
 });

@@ -4,10 +4,10 @@ import {
   experimental_streamTranscribe as streamTranscribe,
 } from "ai";
 
-import { createMicrophonePCMStream } from "../microphone";
-import type { Transcriber, Transcription } from "./types";
+import { createPcmStream } from "../audio";
+import type { Transcriber, TranscriberInput, Transcription } from "./types";
 
-export type { Transcriber, Transcription } from "./types";
+export type { Transcriber, TranscriberInput, Transcription } from "./types";
 
 const tokenTimeoutMs = 15_000;
 const defaultTokenEndpoint = "/api/transcription";
@@ -34,21 +34,20 @@ async function requestToken(endpoint: string, signal: AbortSignal): Promise<Toke
 }
 
 async function startTranscription(
-  onDelta: (delta: string) => void,
-  signal: AbortSignal,
+  { onDelta, signal, stream }: TranscriberInput,
   tokenEndpoint: string,
 ): Promise<Transcription> {
-  const microphonePromise = createMicrophonePCMStream();
+  const pcmPromise = createPcmStream(stream);
   const tokenPromise = requestToken(tokenEndpoint, signal);
   void tokenPromise.catch(() => undefined);
-  const microphone = await microphonePromise;
+  const pcm = await pcmPromise;
 
   if (signal.aborted) {
-    await microphone.stop();
+    await pcm.close();
     signal.throwIfAborted();
   }
 
-  const stop = () => void microphone.stop();
+  const stop = () => pcm.close();
   signal.addEventListener("abort", stop, { once: true });
 
   const text = (async () => {
@@ -56,8 +55,8 @@ async function startTranscription(
       const { model, token } = await tokenPromise;
       const result = streamTranscribe({
         abortSignal: signal,
-        audio: microphone.audioStream,
-        inputAudioFormat: { rate: microphone.sampleRate, type: "audio/pcm" },
+        audio: pcm.readable,
+        inputAudioFormat: { rate: pcm.sampleRate, type: "audio/pcm" },
         model: createGateway({ apiKey: token }).transcription(model),
       });
 
@@ -68,19 +67,19 @@ async function startTranscription(
       return result.text;
     } finally {
       signal.removeEventListener("abort", stop);
-      await microphone.stop();
+      await pcm.close();
     }
   })().catch((error) => {
     if (NoTranscriptGeneratedError.isInstance(error)) return "";
     throw error;
   });
 
-  return { stop, stream: microphone.mediaStream, text };
+  return { stop, text };
 }
 
 export function createAiSdkTranscriber(options?: AiSdkTranscriberOptions): Transcriber {
   const tokenEndpoint = options?.tokenEndpoint ?? defaultTokenEndpoint;
   return {
-    start: (onDelta, signal) => startTranscription(onDelta, signal, tokenEndpoint),
+    start: (input) => startTranscription(input, tokenEndpoint),
   };
 }
