@@ -9,14 +9,24 @@
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: transparent;
+  background-color: transparent;
   color: inherit;
   transition: background-color 150ms;
 }
 
 .chat-voice-input-button:hover,
 .chat-voice-input-button-recording {
-  background: var(--chat-voice-input-accent, color-mix(in srgb, currentColor 10%, transparent));
+  background-color: var(
+    --chat-voice-input-button-background,
+    color-mix(in srgb, currentColor 10%, transparent)
+  );
+}
+
+.chat-voice-input-button-recording:hover {
+  background-color: var(
+    --chat-voice-input-button-background-hover,
+    color-mix(in srgb, currentColor 18%, transparent)
+  );
 }
 
 .chat-voice-input-button:focus-visible {
@@ -43,7 +53,7 @@
 .chat-voice-input-error {
   min-width: 0;
   overflow: hidden;
-  color: var(--chat-voice-input-error, #ef4444);
+  color: var(--chat-voice-input-muted, color-mix(in srgb, currentColor 60%, transparent));
   font-size: 0.875rem;
   text-align: right;
   text-overflow: ellipsis;
@@ -64,6 +74,8 @@
   height: 2rem;
   flex: 1;
   color: inherit;
+  -webkit-mask-image: linear-gradient(to right, transparent, black 10%);
+  mask-image: linear-gradient(to right, transparent, black 10%);
 }
 
 @media (prefers-reduced-motion: no-preference) {

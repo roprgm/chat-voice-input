@@ -20,6 +20,7 @@ export function ChatVoiceInputTimer() {
 
     function update(): void {
       const elapsed = Math.floor((performance.now() - startedAt) / 1_000);
+      clock.dateTime = `PT${elapsed}S`;
       clock.textContent = formatElapsedTime(elapsed);
     }
 
@@ -30,7 +31,7 @@ export function ChatVoiceInputTimer() {
 
   if (!stream) return null;
   return (
-    <time className="chat-voice-input-timer" ref={timeRef}>
+    <time className="chat-voice-input-timer" dateTime="PT0S" ref={timeRef}>
       0:00
     </time>
   );

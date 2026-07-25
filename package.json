@@ -2,6 +2,18 @@
   "name": "chat-voice-input",
   "version": "0.1.0",
   "description": "Composable React voice input for live transcription.",
+  "homepage": "https://chat-voice-input.vercel.app",
+  "bugs": {
+    "url": "https://github.com/roprgm/chat-voice-input/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/roprgm/chat-voice-input.git"
+  },
+  "author": {
+    "name": "Rodrigo Belfiore",
+    "url": "https://github.com/roprgm"
+  },
   "license": "MIT",
   "type": "module",
   "sideEffects": [
@@ -22,7 +34,7 @@
       "import": "./dist/server.js"
     },
     "./ai-sdk": {
-      "types": "./dist/transcription.d.ts",
+      "types": "./dist/transcribers/ai-sdk.d.ts",
       "import": "./dist/ai-sdk.js"
     },
     "./style.css": "./dist/style.css"
@@ -38,7 +50,7 @@
     "format": "biome format --write .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --project tsconfig.node.json --noEmit && tsc --project demo/tsconfig.json --noEmit && tsc --project tests/tsconfig.json --noEmit",
     "prepublishOnly": "pnpm check && pnpm test && pnpm build"
   },
   "keywords": [
@@ -51,12 +63,10 @@
     "voice-input"
   ],
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "packageManager": "pnpm@10.13.1",
-  "dependencies": {
-    "lucide-react": "^1.25.0"
-  },
   "peerDependencies": {
     "@ai-sdk/gateway": "^4.0.0",
     "ai": "^7.0.0",

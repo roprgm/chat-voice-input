@@ -4,8 +4,22 @@ Chat Voice Input adds live microphone transcription to a React composer. It writ
 transcript deltas into a controlled value and includes a microphone button, waveform,
 timer, and error state. Audio is never stored by the package.
 
-The UI accepts a `Transcriber`, so transcription can run through any browser API,
-service, or local model.
+The UI accepts a `Transcriber` and includes adapters for AI SDK transcription and
+the browser's native speech recognition. You can also connect any service or local
+model with the same small interface.
+
+<p align="center">
+  <a href="https://chat-voice-input.vercel.app">Live demo</a>
+</p>
+
+<p align="center">
+  <img
+    src="https://github.com/user-attachments/assets/f80e1900-1009-4e7e-8f88-e5243aeb3c75"
+    alt="Chat Voice Input recording interface"
+    width="640"
+  />
+</p>
+
 
 ## Install
 
@@ -15,9 +29,36 @@ pnpm add chat-voice-input
 
 React 18 or newer is required.
 
-## Use the AI SDK transcriber
+## Compose your own layout
 
-The optional AI SDK adapter streams 24 kHz PCM audio through Vercel AI Gateway:
+```tsx
+import ChatVoiceInput, { useChatVoiceInput } from "chat-voice-input";
+
+<ChatVoiceInput.Provider
+  disabled={disabled}
+  onValueChange={setValue}
+  transcriber={transcriber}
+  value={value}
+>
+  <ChatVoiceInput.Error />
+  <ChatVoiceInput.Waveform />
+  <ChatVoiceInput.Timer />
+  <ChatVoiceInput.Button />
+</ChatVoiceInput.Provider>;
+```
+
+`useChatVoiceInput()` exposes `status`, `transcript`, `stream`, `start`, and `stop`.
+Every component is also available as a named export.
+
+The optional stylesheet contains only the built-in control styles and exposes
+`--chat-voice-input-button-background`,
+`--chat-voice-input-button-background-hover`, and `--chat-voice-input-muted` for
+theming. The component does not own its surrounding layout.
+
+## Use the AI SDK transcriber (recommended)
+
+The optional [AI SDK](https://ai-sdk.dev) adapter streams 24 kHz PCM audio through
+Vercel AI Gateway:
 
 ```bash
 pnpm add ai @ai-sdk/gateway
@@ -61,9 +102,43 @@ export function POST(): Promise<Response> {
 }
 ```
 
-Keep `AI_GATEWAY_API_KEY` on the server. When `apiKey` is omitted, AI Gateway uses
-`AI_GATEWAY_API_KEY` from the environment and then Vercel OIDC. Pass `model` to use
-another compatible realtime transcription model.
+Keep `AI_GATEWAY_API_KEY` on the server. Pass `model` to use another compatible
+realtime transcription model.
+
+The adapter opens the microphone and requests the token in parallel so recording
+starts as soon as the browser grants access. PCM audio captured while the token is
+pending stays in the stream and is consumed once transcription connects. If the token
+request fails or times out, the microphone is closed and the component shows its error
+state.
+
+### Protect the token route
+
+The route mints a token that is spent against your Gateway account, and it has no
+authentication of its own. Anyone who finds the URL on a deployed app can transcribe
+on your bill, so gate it before shipping:
+
+- Require an authenticated session and reject anonymous requests.
+- Rate limit per user, and per IP for anything reachable without a session.
+- Serve it over HTTPS only, and never log the token.
+
+```ts
+import { createTranscriptionTokenResponse } from "chat-voice-input/server";
+
+export async function POST(request: Request): Promise<Response> {
+  const session = await auth(request);
+  if (!session) return new Response("Unauthorized", { status: 401 });
+  if (await isRateLimited(session.userId)) {
+    return new Response("Too Many Requests", { status: 429 });
+  }
+
+  return createTranscriptionTokenResponse({
+    apiKey: process.env.AI_GATEWAY_API_KEY,
+  });
+}
+```
+
+Tokens are short-lived and the response is sent with `Cache-Control: no-store`, so a
+leaked token expires on its own — but the route itself stays open until you close it.
 
 Configure another route inside the adapter:
 
@@ -73,7 +148,29 @@ const transcriber = createAiSdkTranscriber({
 });
 ```
 
-## Use another transcriber
+## Use the native browser transcriber
+
+For a setup without a backend, API key, or additional dependency, use the browser's
+built-in speech recognition:
+
+```tsx
+import ChatVoiceInput, { createNativeTranscriber } from "chat-voice-input";
+
+const transcriber = createNativeTranscriber();
+```
+
+Pass it to `ChatVoiceInput` exactly like the AI SDK adapter. You can optionally set
+the recognition language; otherwise it uses `navigator.language`:
+
+```ts
+const transcriber = createNativeTranscriber({ language: "es-ES" });
+```
+
+This adapter uses `SpeechRecognition` or `webkitSpeechRecognition`, so availability
+and transcription quality depend on the browser. It opens a microphone stream for
+the waveform and closes it when transcription stops, aborts, or finishes.
+
+## Use a custom transcriber
 
 Implement the small `Transcriber` contract and pass the object to the component:
 
@@ -96,32 +193,6 @@ const transcriber: Transcriber = {
 `start` returns a stop function, an optional `MediaStream`, and a promise for the
 final text. The waveform and timer appear when `stream` is present.
 
-## Compose your own layout
-
-```tsx
-import ChatVoiceInput, { useChatVoiceInput } from "chat-voice-input";
-
-<ChatVoiceInput.Provider
-  disabled={disabled}
-  onValueChange={setValue}
-  transcriber={transcriber}
-  value={value}
->
-  <ChatVoiceInput.Error />
-  <ChatVoiceInput.Waveform />
-  <ChatVoiceInput.Timer />
-  <ChatVoiceInput.Button />
-</ChatVoiceInput.Provider>;
-```
-
-`useChatVoiceInput()` exposes `status`, `transcript`, `stream`, `start`, and `stop`.
-Every component is also available as a named export.
-
-The optional stylesheet contains only the built-in control styles and exposes
-`--chat-voice-input-accent`, `--chat-voice-input-error`, and
-`--chat-voice-input-muted` for theming. The component does not own its surrounding
-layout.
-
 ## Development
 
 ```bash
@@ -131,8 +202,7 @@ pnpm test
 pnpm build
 ```
 
-Run the minimal Web Speech demo with `pnpm demo`. For Vercel, use
-`pnpm build:demo` as the build command and `demo/dist` as the output directory.
+Run the native browser transcriber demo with `pnpm demo`.
 
 ## License
 

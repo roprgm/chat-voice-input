@@ -2,6 +2,8 @@ import { useEffect, useRef } from "react";
 
 import { useChatVoiceInput } from "./provider";
 
+const fftSize = 256;
+
 export function ChatVoiceInputWaveform() {
   const { stream } = useChatVoiceInput();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -15,13 +17,13 @@ export function ChatVoiceInputWaveform() {
     const context = drawing;
     const audio = new AudioContext();
     const analyser = audio.createAnalyser();
+    analyser.fftSize = fftSize;
     const source = audio.createMediaStreamSource(stream);
     const samples = new Float32Array(analyser.fftSize);
     const levels: number[] = [];
     const color = getComputedStyle(element).color;
     let frame = 0;
 
-    analyser.fftSize = 256;
     source.connect(analyser);
     void audio.resume().catch(() => undefined);
 
