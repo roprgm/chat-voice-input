@@ -91,10 +91,11 @@ export function ChatVoiceInputProvider({
   const currentSession = useRef<Session | undefined>(undefined);
 
   const release = useCallback((session: Session): void => {
-    if (session.released) return;
-    session.released = true;
-    if (currentSession.current === session) currentSession.current = undefined;
-    session.controller.abort();
+    if (!session.released) {
+      session.released = true;
+      if (currentSession.current === session) currentSession.current = undefined;
+      session.controller.abort();
+    }
     stopCapture(session);
   }, []);
 
@@ -190,10 +191,9 @@ export function ChatVoiceInputProvider({
   }
 
   async function stop(): Promise<void> {
-    if (typeof recording !== "object") return;
-    const session = recording;
+    const session = currentSession.current;
+    if (!session) return;
     const live = session.transcription;
-    if (currentSession.current !== session) return;
     if (!live) {
       complete(session, "");
       return;

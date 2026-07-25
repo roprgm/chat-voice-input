@@ -216,6 +216,58 @@ describe("voice input provider", () => {
     await screen.findByRole("button", { name: "Start voice input" });
   });
 
+  it("stops recording when its form is submitted", async () => {
+    const mic = microphone();
+    const session = recording();
+    render(
+      <form aria-label="Composer" onSubmit={(event) => event.preventDefault()}>
+        <ChatVoiceInputProvider
+          disabled={false}
+          onValueChange={vi.fn()}
+          transcriber={session.transcriber}
+          value=""
+        >
+          <ChatVoiceInputButton />
+        </ChatVoiceInputProvider>
+        <button type="submit">Send</button>
+      </form>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
+    await screen.findByRole("button", { name: "Stop voice input" });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(session.stop).toHaveBeenCalledOnce();
+    expect(mic.track.stop).toHaveBeenCalledOnce();
+  });
+
+  it("cancels microphone permission when its form is submitted", async () => {
+    const permission = deferred<MediaStream>();
+    const mic = microphone(permission.promise);
+    const session = recording();
+    render(
+      <form aria-label="Composer" onSubmit={(event) => event.preventDefault()}>
+        <ChatVoiceInputProvider
+          disabled={false}
+          onValueChange={vi.fn()}
+          transcriber={session.transcriber}
+          value=""
+        >
+          <ChatVoiceInputButton />
+        </ChatVoiceInputProvider>
+        <button type="submit">Send</button>
+      </form>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByRole("button", { name: "Start voice input" });
+    permission.resolve({ getTracks: () => [mic.track] } as unknown as MediaStream);
+
+    await waitFor(() => expect(mic.track.stop).toHaveBeenCalledOnce());
+    expect(session.start).not.toHaveBeenCalled();
+  });
+
   it("returns to idle without an error when the user stops without speaking", async () => {
     microphone();
     const session = recording();

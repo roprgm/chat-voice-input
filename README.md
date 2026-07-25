@@ -181,6 +181,7 @@ failure shows `Voice input is unavailable.` and changes the button to Retry.
 | Microphone is unavailable or busy | Rejects the start; shows the error and Retry |
 | Transcriber emits text | Updates the value immediately |
 | User presses Stop | Stops capture; shows Loading until final text settles |
+| Its containing form is submitted | Stops an active or pending session; keeps the current value |
 | Transcriber finishes on its own | Stops capture, applies final text, and returns to idle |
 | Transcriber ends without text | Keeps the current value; returns to idle without an error |
 | Remote transcriber is still connecting | Captures audio; shows recording only after the adapter confirms it started |
