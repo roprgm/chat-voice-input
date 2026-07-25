@@ -55,6 +55,8 @@ type Transcriber = {
 
 `isSupported` is an optional synchronous check. It must not perform network work.
 A transcriber must not request another microphone or stop the provided stream.
+Settling `text` ends the session: resolving applies the final text, while rejecting
+reports a failure. Both paths release the provider's capture.
 
 ### Audio conversion
 
@@ -99,6 +101,10 @@ WebKit does not currently let `SpeechRecognition` consume the provider's
 `MediaStream`. The provider uses the stream for visualization, and the native
 adapter observes its lifecycle, while WebKit may capture audio internally for
 recognition.
+
+WebKit also chooses that capture device independently. If the provider receives a
+specific microphone, the waveform and native recognition may use different
+devices.
 
 This does not satisfy the ideal single-source architecture and remains an open
 design problem. Do not add another explicit `getUserMedia` call to the native
