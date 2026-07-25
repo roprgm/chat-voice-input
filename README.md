@@ -202,8 +202,7 @@ pnpm test
 pnpm build
 ```
 
-Run the native browser transcriber demo with `pnpm demo`. For Vercel, use
-`pnpm build:demo` as the build command and `demo/dist` as the output directory.
+Run the native browser transcriber demo with `pnpm demo`.
 
 ## License
 
