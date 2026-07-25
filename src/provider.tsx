@@ -24,6 +24,8 @@ type ChatVoiceInputContextValue = {
 };
 
 export type ChatVoiceInputProviderProps = {
+  /** TEMPORARY EXPERIMENT: transcription-only demo. DO NOT MERGE. */
+  readonly capture?: boolean;
   readonly children: ReactNode;
   readonly disabled: boolean;
   readonly onValueChange: (value: string) => void;
@@ -81,6 +83,7 @@ export function useChatVoiceInput(): ChatVoiceInputContextValue {
 }
 
 export function ChatVoiceInputProvider({
+  capture = true,
   children,
   disabled,
   onValueChange,
@@ -135,10 +138,13 @@ export function ChatVoiceInputProvider({
       return;
     }
 
-    const mediaDevices = globalThis.navigator?.mediaDevices;
-    if (!mediaDevices) {
-      setRecording("error");
-      return;
+    let mediaDevices: MediaDevices | undefined;
+    if (capture) {
+      mediaDevices = globalThis.navigator?.mediaDevices;
+      if (!mediaDevices) {
+        setRecording("error");
+        return;
+      }
     }
 
     const session: Session = {
@@ -154,13 +160,15 @@ export function ChatVoiceInputProvider({
     flushSync(() => setRecording("loading"));
 
     try {
-      session.stream = await mediaDevices.getUserMedia(microphoneConstraints);
-      session.controller.signal.throwIfAborted();
+      if (mediaDevices) {
+        session.stream = await mediaDevices.getUserMedia(microphoneConstraints);
+        session.controller.signal.throwIfAborted();
 
-      for (const track of session.stream.getTracks()) {
-        const onEnded = () => fail(session);
-        track.addEventListener("ended", onEnded, { once: true });
-        session.removeTrackListeners.push(() => track.removeEventListener("ended", onEnded));
+        for (const track of session.stream.getTracks()) {
+          const onEnded = () => fail(session);
+          track.addEventListener("ended", onEnded, { once: true });
+          session.removeTrackListeners.push(() => track.removeEventListener("ended", onEnded));
+        }
       }
 
       if (!transcriber) {
@@ -175,7 +183,7 @@ export function ChatVoiceInputProvider({
           onValueChange(message(session.prefix, session.transcript));
         },
         signal: session.controller.signal,
-        stream: session.stream,
+        stream: session.stream ?? new MediaStream(),
       });
       session.controller.signal.throwIfAborted();
       session.transcription = live;
