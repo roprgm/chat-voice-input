@@ -164,17 +164,17 @@ failure shows `Voice input is unavailable.` and changes the button to Retry.
 
 | Scenario | Behavior |
 | --- | --- |
+| Voice input is disabled | Disables Start; does not call the transcriber |
+| Waiting for microphone permission or transcriber start | Shows Loading; disables the button; shows no recording UI |
 | Capture is active | Shows Stop, waveform, and timer when a stream is available |
+| User denies microphone permission | Rejects the start; shows the error and Retry |
 | Transcriber emits text | Updates the value immediately |
 | User presses Stop | Stops capture; shows Loading until final text settles |
 | Capture ends before final text | Hides recording UI; shows Loading until final text settles |
 | Transcriber ends without text | Keeps the current value; returns to idle without an error |
-| Waiting for microphone permission | Shows Loading; disables the button; shows no recording UI |
-| Transcriber start is still pending | Shows Loading; disables the button; shows no recording UI |
 | Active capture returns while a remote transcriber connects | Shows recording because the microphone is active; the adapter owns captured audio |
-| Voice input is disabled | Disables Start; does not call the transcriber |
-| Microphone is unavailable, busy, or denied | Rejects the start; shows the error and Retry |
-| Transcriber is locally unavailable | Rejects before requesting the microphone; shows the error and Retry |
+| Microphone is unavailable or busy | Rejects the start; shows the error and Retry |
+| Native transcriber is selected but unavailable | Rejects before requesting the microphone; shows the error and Retry |
 | Transcriber fails during recording | Aborts capture; keeps emitted text; shows the error and Retry |
 | Transcriber reports a microphone disconnect | Aborts capture; keeps emitted text; shows the error and Retry |
 | Voice input is disabled or unmounted while active | Aborts capture and ignores late results |
