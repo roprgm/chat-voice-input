@@ -197,7 +197,8 @@ pnpm test
 pnpm build
 ```
 
-Run the native browser transcriber demo with `pnpm demo`.
+Run the demo with `pnpm demo`. Its selector switches between native browser
+transcription and the streaming AI SDK models available through AI Gateway.
 
 ## License
 

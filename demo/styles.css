@@ -17,7 +17,9 @@ body {
 }
 
 #root {
+  display: flex;
   width: min(42rem, calc(100% - 2rem));
+  flex-direction: column;
 }
 
 .composer {
@@ -44,6 +46,21 @@ textarea {
   align-items: center;
   justify-content: flex-end;
   gap: 0.5rem;
+}
+
+.transcriber-select {
+  field-sizing: content;
+  height: 2rem;
+  align-self: center;
+  margin-block-end: 1rem;
+  cursor: pointer;
+  border: 0;
+  outline: 0;
+  padding-inline: 0.25rem;
+  background: transparent;
+  color: var(--chat-voice-input-muted, color-mix(in srgb, currentColor 60%, transparent));
+  font: inherit;
+  font-size: 0.8125rem;
 }
 
 .submit {
