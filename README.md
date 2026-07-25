@@ -196,7 +196,7 @@ final text. It can also return an optional `captureEnded` promise so recording U
 stops while final text is still being processed. The waveform and timer appear when
 `stream` is present.
 
-## Predictable recording lifecycle
+## Edge cases handled
 
 The built-in transcribers keep the controls aligned with actual microphone capture,
 including edge cases that voice interfaces often miss:
