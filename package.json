@@ -1,6 +1,6 @@
 {
   "name": "chat-voice-input",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Composable React voice input for live transcription.",
   "homepage": "https://chat-voice-input.vercel.app",
   "bugs": {
