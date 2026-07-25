@@ -177,7 +177,8 @@ describe("voice input provider", () => {
     const transcriber: Transcriber = {
       async start({ onDelta }) {
         onDelta("hello");
-        onDelta(" world");
+        onDelta(".");
+        onDelta("\nworld");
         return { stop: vi.fn(), text: text.promise };
       },
     };
@@ -186,8 +187,8 @@ describe("voice input provider", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
     await screen.findByRole("button", { name: "Stop voice input" });
 
-    expect(onDelta.mock.calls).toEqual([["hello"], [" world"]]);
-    text.resolve("hello world");
+    expect(onDelta.mock.calls).toEqual([["hello"], ["."], ["\nworld"]]);
+    text.resolve("hello.\nworld");
     await screen.findByRole("button", { name: "Start voice input" });
   });
 

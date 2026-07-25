@@ -48,7 +48,7 @@ function Composer() {
   const [value, setValue] = useState("");
 
   function appendTranscript(delta: string): void {
-    setValue((current) => [current.trimEnd(), delta.trim()].filter(Boolean).join(" "));
+    setValue((current) => current + delta);
   }
 
   return (
@@ -65,8 +65,8 @@ function Composer() {
 ```
 
 `ChatVoiceInput` emits transcription deltas without owning or modifying the editor
-value. This example appends them to the end, but the consumer decides where and how
-to apply each delta.
+value. This example appends each delta verbatim; spacing and punctuation come from
+the transcriber. The consumer can instead decide where and how to apply each delta.
 
 The adapter requests a short-lived token from `POST /api/transcription`. Add that
 route to your server:

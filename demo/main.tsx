@@ -32,7 +32,7 @@ function Demo() {
   const [value, setValue] = useState("");
 
   function appendTranscript(delta: string): void {
-    setValue((current) => [current.trimEnd(), delta.trim()].filter(Boolean).join(" "));
+    setValue((current) => current + delta);
   }
 
   function onSubmit(event: SubmitEvent<HTMLFormElement>): void {
