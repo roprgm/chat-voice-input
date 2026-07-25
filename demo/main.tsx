@@ -1,11 +1,12 @@
-import ChatVoiceInput, { createNativeTranscriber } from "chat-voice-input";
+import ChatVoiceInput from "chat-voice-input";
+import { createAiSdkTranscriber } from "chat-voice-input/ai-sdk";
 import { type SubmitEvent, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import "chat-voice-input/style.css";
 import "./styles.css";
 
-const transcriber = createNativeTranscriber();
+const transcriber = createAiSdkTranscriber();
 
 function Demo() {
   const [value, setValue] = useState("");

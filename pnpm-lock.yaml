@@ -53,6 +53,9 @@ importers:
       '@ai-sdk/gateway':
         specifier: ^4.0.23
         version: 4.0.28(zod@4.4.3)
+      ai:
+        specifier: ^7.0.31
+        version: 7.0.37(zod@4.4.3)
       chat-voice-input:
         specifier: workspace:*
         version: link:..
